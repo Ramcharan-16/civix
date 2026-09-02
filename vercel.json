@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.ts"
+      "destination": "https://civix-xo87.onrender.com/api/$1"
     },
     {
       "source": "/((?!api/).*)",

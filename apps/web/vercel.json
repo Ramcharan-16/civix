@@ -1,8 +1,12 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
   "rewrites": [
     {
-      "source": "/((?!assets|robots\\.txt|sitemap\\.xml|google[a-z0-9]+\\.html).*)",
+      "source": "/api/(.*)",
+      "destination": "https://civix-xo87.onrender.com/api/$1"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

@@ -22,8 +22,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const DEFAULT_PROD_API_URL = 'https://civix-xo87.onrender.com';
+
 export const getApiUrl = (endpoint: string): string => {
-  const base = import.meta.env.VITE_API_URL || '';
+  const envBase = import.meta.env.VITE_API_URL;
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  // In production (Vercel), automatically point to live Render backend if VITE_API_URL is missing
+  const base = envBase || (isLocal ? '' : DEFAULT_PROD_API_URL);
+  
   if (!base || endpoint.startsWith('http')) return endpoint;
   const cleanBase = base.replace(/\/+$/, '');
   const cleanPath = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
@@ -72,7 +78,7 @@ function get405ErrorMessage(): string {
   if (isLocal) {
     return 'API server unreachable (405 Method Not Allowed). Please ensure the backend server is running on port 5000 via "pnpm dev".';
   }
-  return 'Backend API unreachable (405 Method Not Allowed). The static host rejected the API route. Please ensure the backend is deployed and VITE_API_URL is set in your deployment environment variables, or check vercel.json rewrites.';
+  return 'Backend API connecting... (Render free tier server is waking up from sleep, please retry in 15 seconds).';
 }
 
 async function executeSmartFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
@@ -81,26 +87,34 @@ async function executeSmartFetch(endpoint: string, options: RequestInit = {}): P
   try {
     res = await fetch(targetUrl, options);
   } catch (err: any) {
-    // If request to relative proxy failed, attempt direct port 5000 in dev
-    if (typeof window !== 'undefined' && !targetUrl.startsWith('http') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      try {
-        const directUrl = `http://localhost:5000${targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`}`;
-        return await fetch(directUrl, options);
-      } catch {}
+    // If request failed, attempt direct failover
+    if (typeof window !== 'undefined') {
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const failoverBase = isLocal ? 'http://localhost:5000' : DEFAULT_PROD_API_URL;
+      if (!targetUrl.startsWith(failoverBase)) {
+        try {
+          const directUrl = `${failoverBase}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+          return await fetch(directUrl, options);
+        } catch {}
+      }
     }
     throw new Error(`Server connection failed. ${err.message || 'Service offline'}.`);
   }
 
-  // If static server responded with 405 (Method Not Allowed - e.g. static host or Vite without proxy)
+  // If static server responded with 405, automatically retry to live Render backend
   if (res.status === 405) {
-    if (typeof window !== 'undefined' && !targetUrl.startsWith('http') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      try {
-        const directUrl = `http://localhost:5000${targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`}`;
-        const directRes = await fetch(directUrl, options);
-        if (directRes.status !== 405) {
-          return directRes;
-        }
-      } catch {}
+    if (typeof window !== 'undefined') {
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const failoverBase = isLocal ? 'http://localhost:5000' : DEFAULT_PROD_API_URL;
+      if (!targetUrl.startsWith(failoverBase)) {
+        try {
+          const directUrl = `${failoverBase}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+          const directRes = await fetch(directUrl, options);
+          if (directRes.status !== 405) {
+            return directRes;
+          }
+        } catch {}
+      }
     }
     throw new Error(get405ErrorMessage());
   }

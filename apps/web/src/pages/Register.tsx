@@ -1,6 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth, Role } from '../context/AuthContext';
-import { LogIn, UserPlus } from 'lucide-react';
+import { City3DCanvas } from '../components/City3DCanvas';
+import { 
+  LogIn, 
+  UserPlus, 
+  User, 
+  Mail, 
+  Phone, 
+  Lock, 
+  Eye, 
+  EyeOff, 
+  Briefcase, 
+  Radio, 
+  ShieldCheck 
+} from 'lucide-react';
 
 interface RegisterProps {
   isOfficial: boolean;
@@ -13,9 +26,32 @@ export const Register: React.FC<RegisterProps> = ({ isOfficial, onSwitchToLogin 
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role>('STAFF');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 3D Card tilt on hover
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardTransform, setCardTransform] = useState('');
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const rotateX = ((y - centerY) / centerY) * -4;
+    const rotateY = ((x - centerX) / centerX) * 4;
+
+    setCardTransform(`perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateY(-2px)`);
+  };
+
+  const handleMouseLeave = () => {
+    setCardTransform('perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(0px)');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,173 +78,305 @@ export const Register: React.FC<RegisterProps> = ({ isOfficial, onSwitchToLogin 
   return (
     <div
       style={{
+        position: 'relative',
+        minHeight: '100vh',
+        width: '100vw',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',
-        padding: '20px',
-        boxSizing: 'border-box'
+        padding: '28px 20px',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
+        background: isOfficial
+          ? 'radial-gradient(circle at 50% 40%, #150d06 0%, #080402 100%)'
+          : 'radial-gradient(circle at 50% 40%, #091322 0%, #030712 100%)'
       }}
     >
-      <div
-        className="glass-panel"
-        style={{
-          width: '100%',
-          maxWidth: '460px',
-          padding: '40px',
-          boxSizing: 'border-box',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '24px'
-        }}
-      >
-        <div style={{ textAlign: 'center' }}>
-          <div
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '14px',
-              background: isOfficial
-                ? 'linear-gradient(135deg, var(--accent-color), var(--warning-color))'
-                : 'linear-gradient(135deg, var(--primary-color), var(--accent-color))',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.6rem',
-              color: 'white',
-              fontWeight: 800,
-              marginBottom: '16px'
-            }}
-          >
-            {isOfficial ? '🏛️' : '🏠'}
-          </div>
-          <h2 style={{ fontSize: '1.75rem', fontWeight: 800, margin: '0 0 6px 0', letterSpacing: '-0.5px', color: 'white' }}>
-            {isOfficial ? 'Join Civix Officials' : 'Join Civix'}
-          </h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
-            {isOfficial
-              ? 'Register a new official municipal account to access work queues and manage assets.'
-              : 'Register to participate in community governance and resolve infrastructure bugs.'}
-          </p>
-        </div>
+      {/* Three.js 3D Digital Twin City Background */}
+      <City3DCanvas isOfficial={isOfficial} />
 
-        {error && (
-          <div
-            style={{
-              padding: '12px 16px',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.2)',
-              color: '#fca5a5',
-              fontSize: '0.85rem',
-              lineHeight: 1.4
-            }}
-          >
-            {error}
-          </div>
-        )}
+      {/* Perspective Wrap */}
+      <div className="auth-perspective-wrap animate-fade-in" style={{ maxWidth: '490px' }}>
+        <div
+          ref={cardRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          className={`auth-glass-card ${isOfficial ? 'official-theme' : ''}`}
+          style={{
+            transform: cardTransform || undefined,
+          }}
+        >
+          {/* Ambient Glow */}
+          <div className={`auth-card-halo ${isOfficial ? 'official' : 'citizen'}`} />
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Full Name</label>
-            <input
-              type="text"
-              placeholder={isOfficial ? 'e.g. Inspector Ramesh' : 'e.g. Aarav Mehta'}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Email Address</label>
-            <input
-              type="email"
-              placeholder={isOfficial ? 'e.g. officer@civix.gov.in' : 'e.g. aarav@gmail.com'}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>WhatsApp Mobile Number</label>
-              <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600 }}>💬 Live WhatsApp Alerts</span>
-            </div>
-            <input
-              type="tel"
-              placeholder="e.g. 9876543210 or +91 98765 43210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
-            <span style={{ fontSize: '0.73rem', color: 'var(--text-muted)' }}>
-              Real-time complaint tracking & resolution updates will be sent to this WhatsApp number.
-            </span>
-          </div>
-
-          {isOfficial && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Municipal Role</label>
-              <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value as Role)}
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: '22px', position: 'relative' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '5px 14px',
+                borderRadius: '20px',
+                background: isOfficial ? 'rgba(245, 158, 11, 0.12)' : 'rgba(6, 182, 212, 0.12)',
+                border: isOfficial ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(6, 182, 212, 0.3)',
+                marginBottom: '12px',
+              }}
+            >
+              <span
                 style={{
-                  padding: '10px',
-                  borderRadius: '8px',
-                  backgroundColor: 'rgba(255,255,255,0.03)',
-                  border: '1px solid var(--border-glass)',
-                  color: 'white',
-                  fontSize: '0.9rem',
-                  outline: 'none'
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background: isOfficial ? '#f59e0b' : '#06b6d4',
+                  boxShadow: isOfficial ? '0 0 8px #f59e0b' : '0 0 8px #06b6d4',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  textTransform: 'uppercase',
+                  color: isOfficial ? '#fbbf24' : '#38bdf8',
                 }}
               >
-                <option value="STAFF" style={{ backgroundColor: '#0f172a' }}>Field Staff / Officer</option>
-                <option value="DEPARTMENT_ADMIN" style={{ backgroundColor: '#0f172a' }}>Department Administrator</option>
-              </select>
+                {isOfficial ? 'Civix Municipal Administration' : 'Civix Community Network'}
+              </span>
+            </div>
+
+            <h1
+              style={{
+                fontSize: '1.85rem',
+                fontWeight: 800,
+                margin: '0 0 6px 0',
+                letterSpacing: '-0.5px',
+                color: '#f8fafc',
+              }}
+            >
+              {isOfficial ? 'Join Municipal Fleet' : 'Create Citizen Account'}
+            </h1>
+            <p
+              style={{
+                fontSize: '0.86rem',
+                color: 'var(--text-secondary)',
+                margin: 0,
+                lineHeight: 1.45,
+              }}
+            >
+              {isOfficial
+                ? 'Register municipal official credentials for ward telemetry & assignment dispatch.'
+                : 'Join your neighborhood network to resolve civic issues & track municipal SLA.'}
+            </p>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div
+              className="animate-fade-in"
+              style={{
+                padding: '12px 14px',
+                borderRadius: '12px',
+                backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.28)',
+                color: '#fca5a5',
+                fontSize: '0.84rem',
+                lineHeight: 1.4,
+                marginBottom: '18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span>⚠️</span>
+              <span>{error}</span>
             </div>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+          {/* Register Form */}
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Full Name */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Full Name</label>
+              <div className={`auth-input-wrapper ${isOfficial ? 'official' : ''}`}>
+                <User size={16} className="leading-icon" />
+                <input
+                  type="text"
+                  placeholder={isOfficial ? 'e.g. Officer Ramesh Kumar' : 'e.g. Aarav Mehta'}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={loading}
-            style={{ 
-              width: '100%', 
-              padding: '12px', 
-              marginTop: '10px',
-              background: isOfficial ? 'linear-gradient(135deg, var(--accent-color), var(--primary-color))' : undefined 
+            {/* Email Address */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Email Address</label>
+              <div className={`auth-input-wrapper ${isOfficial ? 'official' : ''}`}>
+                <Mail size={16} className="leading-icon" />
+                <input
+                  type="email"
+                  placeholder={isOfficial ? 'e.g. officer@civix.gov.in' : 'e.g. aarav.mehta@gmail.com'}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* WhatsApp Mobile */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  WhatsApp Mobile Number
+                </label>
+                <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 600 }}>💬 Real-Time Alerts</span>
+              </div>
+              <div className={`auth-input-wrapper ${isOfficial ? 'official' : ''}`}>
+                <Phone size={16} className="leading-icon" />
+                <input
+                  type="tel"
+                  placeholder="e.g. 9876543210 or +91 98765 43210"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Municipal Role (if Official) */}
+            {isOfficial && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Municipal Role & Assignment
+                </label>
+                <div className="auth-input-wrapper official">
+                  <Briefcase size={16} className="leading-icon" />
+                  <select
+                    value={selectedRole}
+                    onChange={(e) => setSelectedRole(e.target.value as Role)}
+                    style={{
+                      width: '100%',
+                      paddingLeft: '42px',
+                      paddingRight: '16px',
+                      height: '44px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      color: 'white',
+                      fontSize: '0.9rem',
+                      outline: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="STAFF" style={{ backgroundColor: '#0f172a' }}>Field Staff / Officer</option>
+                    <option value="DEPARTMENT_ADMIN" style={{ backgroundColor: '#0f172a' }}>Department Administrator</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Password */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Password</label>
+              <div className={`auth-input-wrapper ${isOfficial ? 'official' : ''}`}>
+                <Lock size={16} className="leading-icon" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="auth-password-toggle"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              className="btn"
+              disabled={loading}
+              style={{
+                width: '100%',
+                padding: '13px',
+                marginTop: '10px',
+                borderRadius: '12px',
+                fontSize: '0.92rem',
+                fontWeight: 700,
+                letterSpacing: '0.3px',
+                color: 'white',
+                background: isOfficial
+                  ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                  : 'linear-gradient(135deg, #06b6d4, #2563eb)',
+                boxShadow: isOfficial
+                  ? '0 6px 20px rgba(245, 158, 11, 0.4)'
+                  : '0 6px 20px rgba(6, 182, 212, 0.4)',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {loading ? (
+                'Registering Identity in Municipal Ledger...'
+              ) : (
+                <>
+                  <span>Create {isOfficial ? 'Official Account' : 'Citizen Account'}</span>
+                  <UserPlus size={18} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Switch to Login */}
+          <div
+            style={{
+              marginTop: '22px',
+              paddingTop: '18px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              textAlign: 'center',
             }}
           >
-            {loading ? 'Registering...' : 'Register Account'}
-            {!loading && <UserPlus size={18} />}
-          </button>
-        </form>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Already registered in the Civix database?
+            </p>
+            <button
+              type="button"
+              onClick={onSwitchToLogin}
+              className="btn btn-secondary"
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '10px',
+                fontSize: '0.84rem',
+              }}
+            >
+              <LogIn size={15} />
+              Sign In Instead
+            </button>
+          </div>
+        </div>
+      </div>
 
-        <div style={{ borderTop: '1px solid var(--border-glass)', paddingTop: '20px', textAlign: 'center' }}>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
-            Already have an account?
-          </p>
-          <button
-            onClick={onSwitchToLogin}
-            className="btn btn-secondary"
-            style={{ width: '100%', padding: '10px' }}
-          >
-            <LogIn size={16} />
-            Sign In Instead
-          </button>
+      {/* Telemetry Bar */}
+      <div style={{ marginTop: '20px', zIndex: 10 }}>
+        <div className="auth-telemetry-badge">
+          <Radio size={13} color={isOfficial ? '#fbbf24' : '#38bdf8'} />
+          <span>Municipal Gateway Ready</span>
+          <span style={{ opacity: 0.4 }}>|</span>
+          <ShieldCheck size={13} color="#10b981" />
+          <span>Zero-Knowledge Secure Encryption</span>
         </div>
       </div>
     </div>

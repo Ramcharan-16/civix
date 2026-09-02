@@ -27,6 +27,7 @@ export const Login: React.FC<LoginProps> = ({ isOfficial, onSwitchPortal, onSwit
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isExploreMode, setIsExploreMode] = useState(false);
 
   // 3D Card tilt on hover
   const cardRef = useRef<HTMLDivElement>(null);
@@ -93,15 +94,27 @@ export const Login: React.FC<LoginProps> = ({ isOfficial, onSwitchPortal, onSwit
         boxSizing: 'border-box',
         overflow: 'hidden',
         background: isOfficial
-          ? 'radial-gradient(circle at 50% 40%, #150d06 0%, #080402 100%)'
-          : 'radial-gradient(circle at 50% 40%, #091322 0%, #030712 100%)'
+          ? 'radial-gradient(circle at 50% 30%, #1c0f04 0%, #080301 100%)'
+          : 'radial-gradient(circle at 50% 30%, #08172e 0%, #020713 100%)'
       }}
     >
       {/* Three.js 3D Digital Twin City Grid Background (Isometric Towers) */}
-      <City3DCanvas isOfficial={isOfficial} />
+      <City3DCanvas 
+        isOfficial={isOfficial} 
+        isExploreMode={isExploreMode}
+        onToggleExplore={() => setIsExploreMode(!isExploreMode)}
+      />
 
       {/* Main Perspective Container */}
-      <div className="auth-perspective-wrap animate-fade-in">
+      <div 
+        className="auth-perspective-wrap animate-fade-in"
+        style={{
+          opacity: isExploreMode ? 0 : 1,
+          pointerEvents: isExploreMode ? 'none' : 'auto',
+          transform: isExploreMode ? 'scale(0.85) translateY(40px)' : 'scale(1) translateY(0)',
+          transition: 'all 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
+      >
         <div
           ref={cardRef}
           onMouseMove={handleMouseMove}
@@ -336,7 +349,15 @@ export const Login: React.FC<LoginProps> = ({ isOfficial, onSwitchPortal, onSwit
       </div>
 
       {/* Bottom Live Municipal Telemetry Bar */}
-      <div style={{ marginTop: '20px', zIndex: 10 }}>
+      <div 
+        style={{ 
+          marginTop: '20px', 
+          zIndex: 10,
+          opacity: isExploreMode ? 0 : 1,
+          pointerEvents: isExploreMode ? 'none' : 'auto',
+          transition: 'opacity 0.3s ease'
+        }}
+      >
         <div className="auth-telemetry-badge">
           <Radio size={13} color={isOfficial ? '#fbbf24' : '#38bdf8'} />
           <span>Live Digital Twin Grid: 10 Wards Synchronized</span>

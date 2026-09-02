@@ -1,0 +1,329 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/client"
+}
+
+enum Role {
+  CITIZEN
+  STAFF
+  DEPARTMENT_ADMIN
+  SUPER_ADMIN
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_AI_ANALYSIS
+  PENDING_VERIFICATION
+  VERIFIED
+  REJECTED
+  ASSIGNED
+  ACCEPTED
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum SLAStatus {
+  NOT_STARTED
+  ON_TRACK
+  DUE_SOON
+  OVERDUE
+  RESOLVED_ON_TIME
+  RESOLVED_LATE
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+// ------------------------------------------------------
+// CLEAN DEDICATED USER TABLES
+// ------------------------------------------------------
+
+model Citizen {
+  id           String      @id @default(uuid())
+  name         String
+  email        String      @unique
+  phone        String
+  password     String      @default("password123")
+  passwordHash String
+  address      String?     @db.Text
+  createdAt    DateTime    @default(now())
+
+  complaints   Complaint[] @relation("CitizenComplaints")
+  feedbacks    Feedback[]
+  upvotes      Upvote[]
+
+  @@map("citizens")
+}
+
+model StaffMember {
+  id           String      @id @default(uuid())
+  employeeId   String      @unique
+  name         String
+  email        String      @unique
+  phone        String
+  password     String      @default("password123")
+  passwordHash String
+  departmentId String
+  designation  String      @default("Field Staff")
+  createdAt    DateTime    @default(now())
+
+  department          Department                @relation(fields: [departmentId], references: [id])
+  assignedComplaints  Complaint[]               @relation("StaffAssignedComplaints")
+  assignments         ComplaintAssignment[]     @relation("StaffAssignments")
+  progressUpdates     ComplaintProgressUpdate[]
+
+  @@map("staff_members")
+}
+
+model DepartmentAdmin {
+  id           String     @id @default(uuid())
+  employeeId   String     @unique
+  name         String
+  email        String     @unique
+  phone        String
+  password     String     @default("password123")
+  passwordHash String
+  departmentId String
+  designation  String     @default("Department Admin")
+  createdAt    DateTime   @default(now())
+
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  @@map("department_admins")
+}
+
+model SuperAdmin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  phone        String
+  password     String   @default("password123")
+  passwordHash String
+  roleTitle    String   @default("Super Administrator")
+  createdAt    DateTime @default(now())
+
+  @@map("super_admins")
+}
+
+// ------------------------------------------------------
+// DEPARTMENTS & CIVIC DOMAIN TABLES
+// ------------------------------------------------------
+
+model Department {
+  id           String                @id @default(uuid())
+  name         String
+  description  String                @db.Text
+  contactEmail String
+  contactPhone String
+
+  categories       Category[]        @relation("DepartmentCategories")
+  staffMembers     StaffMember[]
+  departmentAdmins DepartmentAdmin[]
+  complaints       Complaint[]       @relation("DepartmentComplaints")
+  assignments      ComplaintAssignment[]
+
+  @@map("departments")
+}
+
+model Category {
+  id           String      @id @default(uuid())
+  name         String
+  description  String      @db.Text
+  departmentId String
+
+  department Department  @relation("DepartmentCategories", fields: [departmentId], references: [id], onDelete: Cascade)
+  complaints Complaint[]
+
+  @@map("categories")
+}
+
+model Complaint {
+  id                   String          @id @default(uuid())
+  complaintNumber      String          @unique
+  title                String
+  description          String          @db.Text
+  categoryId           String
+  citizenId            String
+  assignedDepartmentId String?
+  assignedStaffId      String?
+  address              String          @db.Text
+  latitude             Float           @default(12.971598)
+  longitude            Float           @default(77.594562)
+  severity             Severity        @default(MEDIUM)
+  priority             Priority        @default(MEDIUM)
+  status               ComplaintStatus @default(SUBMITTED)
+  createdAt            DateTime        @default(now())
+  resolvedAt           DateTime?
+
+  category           Category                  @relation(fields: [categoryId], references: [id])
+  citizen            Citizen                   @relation("CitizenComplaints", fields: [citizenId], references: [id])
+  assignedDepartment Department?               @relation("DepartmentComplaints", fields: [assignedDepartmentId], references: [id])
+  assignedStaff      StaffMember?              @relation("StaffAssignedComplaints", fields: [assignedStaffId], references: [id])
+  
+  media              ComplaintMedia[]
+  statusLogs         StatusLog[]
+  feedbacks          Feedback[]
+  comments           Comment[]
+  upvotes            Upvote[]
+  assignments        ComplaintAssignment[]
+  progressUpdates    ComplaintProgressUpdate[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([citizenId])
+  @@index([assignedDepartmentId])
+  @@index([assignedStaffId])
+  @@index([createdAt])
+  @@map("complaints")
+}
+
+model ComplaintMedia {
+  id          String    @id @default(uuid())
+  complaintId String
+  fileUrl     String
+  mimeType    String
+  uploadedAt  DateTime  @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("complaint_media")
+}
+
+model StatusLog {
+  id            String    @id @default(uuid())
+  complaintId   String
+  oldStatus     String
+  newStatus     String
+  changedByName String
+  comment       String?   @db.Text
+  createdAt     DateTime  @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("status_logs")
+}
+
+model Feedback {
+  id          String   @id @default(uuid())
+  complaintId String
+  citizenId   String
+  rating      Int
+  comment     String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  citizen   Citizen   @relation(fields: [citizenId], references: [id])
+
+  @@map("feedback")
+}
+
+model Comment {
+  id          String           @id @default(uuid())
+  complaintId String
+  userName    String
+  userRole    Role             @default(CITIZEN)
+  content     String           @db.Text
+  createdAt   DateTime         @default(now())
+
+  complaint   Complaint        @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Upvote {
+  id          String   @id @default(uuid())
+  complaintId String
+  citizenId   String
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  citizen   Citizen   @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+
+  @@unique([complaintId, citizenId])
+  @@map("upvotes")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model ComplaintAssignment {
+  id           String      @id @default(uuid())
+  complaintId  String
+  departmentId String
+  staffId      String
+  assignedBy   String
+  assignedAt   DateTime    @default(now())
+  reason       String?     @db.Text
+
+  complaint  Complaint   @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  department Department  @relation(fields: [departmentId], references: [id])
+  staff      StaffMember @relation("StaffAssignments", fields: [staffId], references: [id])
+
+  @@map("complaint_assignments")
+}
+
+model ComplaintProgressUpdate {
+  id                 String      @id @default(uuid())
+  complaintId        String
+  staffId            String
+  progressPercentage Int
+  description        String      @db.Text
+  createdAt          DateTime    @default(now())
+
+  complaint Complaint   @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  staff     StaffMember @relation(fields: [staffId], references: [id])
+
+  @@map("complaint_progress_updates")
+}
+
+model SlaSetting {
+  id            String @id @default(uuid())
+  key           String @unique
+  durationHours Int
+
+  @@map("sla_settings")
+}

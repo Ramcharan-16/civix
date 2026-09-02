@@ -1,0 +1,29 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# Build outputs
+dist
+dist-ssr
+*.tsbuildinfo
+
+# WhatsApp local auth session & cache
+.wwebjs_auth
+.wwebjs_cache
+puppeteer-profile
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.log
+
+# Temp files
+scratch

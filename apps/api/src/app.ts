@@ -367,4 +367,18 @@ app.get(['/health', '/api/health'], (req, res) => {
   res.json({ status: 'ok', service: 'civix-api', time: new Date() });
 });
 
+// 404 JSON fallback for unmatched routes
+app.use((req, res) => {
+  res.status(404).json({ error: `Route ${req.method} ${req.originalUrl} not found` });
+});
+
+// Global JSON error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[API Unhandled Error]', err);
+  const status = typeof err.status === 'number' ? err.status : (typeof err.statusCode === 'number' ? err.statusCode : 500);
+  res.status(status).json({
+    error: err.message || 'Internal Server Error'
+  });
+});
+
 export default app;

@@ -140,14 +140,17 @@ export const CreateComplaint: React.FC<CreateComplaintProps> = ({ onSuccess }) =
     setLongitude(lng);
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&email=contact@civix.gov.in`);
-      const data = await res.json();
-      if (data && data.display_name) {
-        setAddress(data.display_name);
-      } else {
-        setAddress(`Area near Coordinate (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
+      if (res.ok) {
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : null;
+        if (data && data.display_name) {
+          setAddress(data.display_name);
+          return;
+        }
       }
+      setAddress(`Area near Coordinate (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
     } catch (err) {
-      console.error('Reverse geocoding failed:', err);
+      console.warn('Reverse geocoding failed:', err);
       setAddress(`Area near Coordinate (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
     }
   };

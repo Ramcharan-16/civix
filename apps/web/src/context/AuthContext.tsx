@@ -30,6 +30,43 @@ export const getApiUrl = (endpoint: string): string => {
   return `${cleanBase}${cleanPath}`;
 };
 
+/**
+ * Safely parse JSON from a fetch Response without throwing syntax errors
+ * on empty body (204/empty string) or non-JSON (HTML 404/500).
+ */
+export async function safeJsonParse<T = any>(res: Response, fallback?: any): Promise<T> {
+  try {
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      return (fallback !== undefined ? fallback : {}) as T;
+    }
+    return JSON.parse(text) as T;
+  } catch {
+    return (fallback !== undefined ? fallback : {}) as T;
+  }
+}
+
+function wrapResponseWithSafeJson(response: Response): Response {
+  const originalJson = response.json.bind(response);
+  response.json = async function () {
+    try {
+      const cloned = response.clone();
+      const text = await cloned.text();
+      if (!text || !text.trim()) {
+        return {};
+      }
+      return JSON.parse(text);
+    } catch {
+      try {
+        return await originalJson();
+      } catch {
+        return {};
+      }
+    }
+  };
+  return response;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('civix_token'));
   const [user, setUser] = useState<User | null>(null);
@@ -47,9 +84,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           });
           if (res.ok) {
-            const userData = await res.json();
-            setUser(userData);
-            setToken(storedToken);
+            const userData = await safeJsonParse(res, null);
+            if (userData && userData.id) {
+              setUser(userData);
+              setToken(storedToken);
+            } else {
+              logout();
+            }
           } else {
             // Token expired or invalid
             logout();
@@ -66,18 +107,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string): Promise<User> => {
-    const res = await fetch(getApiUrl('/api/auth/login'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || 'Login failed');
+    let res: Response;
+    try {
+      res = await fetch(getApiUrl('/api/auth/login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+    } catch (netErr: any) {
+      throw new Error(`Server connection failed. Please ensure the backend server is running (${netErr.message || 'offline'}).`);
     }
 
-    const data = await res.json();
+    if (!res.ok) {
+      const errorData = await safeJsonParse(res, { error: `Server error (${res.status})` });
+      throw new Error(errorData.error || errorData.message || 'Login failed');
+    }
+
+    const data = await safeJsonParse(res, null);
+    if (!data || !data.accessToken) {
+      throw new Error('Invalid response received from authentication service');
+    }
+
     localStorage.setItem('civix_token', data.accessToken);
     localStorage.setItem('civix_refresh_token', data.refreshToken);
     setToken(data.accessToken);
@@ -86,18 +136,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (name: string, email: string, phone: string, password: string, role?: Role) => {
-    const res = await fetch(getApiUrl('/api/auth/register'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone, password, role })
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || 'Registration failed');
+    let res: Response;
+    try {
+      res = await fetch(getApiUrl('/api/auth/register'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, phone, password, role })
+      });
+    } catch (netErr: any) {
+      throw new Error(`Server connection failed. Please ensure the backend server is running (${netErr.message || 'offline'}).`);
     }
 
-    const data = await res.json();
+    if (!res.ok) {
+      const errorData = await safeJsonParse(res, { error: `Registration error (${res.status})` });
+      throw new Error(errorData.error || errorData.message || 'Registration failed');
+    }
+
+    const data = await safeJsonParse(res, null);
+    if (!data || !data.accessToken) {
+      throw new Error('Invalid response received from authentication service');
+    }
+
     localStorage.setItem('civix_token', data.accessToken);
     localStorage.setItem('civix_refresh_token', data.refreshToken);
     setToken(data.accessToken);
@@ -112,7 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Wrapper for authenticated API requests
-  const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
     const targetUrl = getApiUrl(url);
     const headers = new Headers(options.headers || {});
     
@@ -126,10 +185,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       headers.set('Content-Type', 'application/json');
     }
 
-    const response = await fetch(targetUrl, {
-      ...options,
-      headers
-    });
+    let response: Response;
+    try {
+      response = await fetch(targetUrl, {
+        ...options,
+        headers
+      });
+    } catch (netErr: any) {
+      console.warn(`[apiFetch] Network connection failure for ${url}:`, netErr);
+      // Return a synthesized synthetic response to prevent uncaught promise rejection
+      return wrapResponseWithSafeJson(new Response(JSON.stringify({ error: 'Network request failed. Service unreachable.' }), {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'application/json' }
+      }));
+    }
 
     // Check if unauthorized (token expired), attempt to refresh
     if (response.status === 401 && token) {
@@ -143,16 +213,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
           if (refreshRes.ok) {
-            const data = await refreshRes.json();
-            localStorage.setItem('civix_token', data.accessToken);
-            if (data.refreshToken) {
-              localStorage.setItem('civix_refresh_token', data.refreshToken);
+            const data = await safeJsonParse(refreshRes, null);
+            if (data && data.accessToken) {
+              localStorage.setItem('civix_token', data.accessToken);
+              if (data.refreshToken) {
+                localStorage.setItem('civix_refresh_token', data.refreshToken);
+              }
+              setToken(data.accessToken);
+              
+              // Retry request with new token
+              headers.set('Authorization', `Bearer ${data.accessToken}`);
+              const retryResponse = await fetch(targetUrl, { ...options, headers });
+              return wrapResponseWithSafeJson(retryResponse);
             }
-            setToken(data.accessToken);
-            
-            // Retry request with new token
-            headers.set('Authorization', `Bearer ${data.accessToken}`);
-            return await fetch(targetUrl, { ...options, headers });
           }
         } catch (e) {
           console.error('Refresh token failed:', e);
@@ -161,7 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout();
     }
 
-    return response;
+    return wrapResponseWithSafeJson(response);
   };
 
   return (

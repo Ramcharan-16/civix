@@ -15,7 +15,15 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: apiTarget,
           changeOrigin: true,
-          secure: false
+          secure: false,
+          configure: (proxy) => {
+            proxy.on('error', (_err, _req, res) => {
+              if (res && 'writeHead' in res && !(res as any).headersSent) {
+                (res as any).writeHead(503, { 'Content-Type': 'application/json' });
+                (res as any).end(JSON.stringify({ error: 'Backend service is starting up or unreachable. Please ensure API server on port 5000 is running.' }));
+              }
+            });
+          }
         },
         '/whatsapp': {
           target: apiTarget,

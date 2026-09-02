@@ -75,15 +75,18 @@ export const Map: React.FC<MapProps> = ({
       setIsSearching(true);
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&email=contact@civix.gov.in&limit=5`);
-        const data = await res.json();
-        if (data && data.length > 0) {
-          setSuggestions(data);
-          setShowSuggestions(true);
-        } else {
-          setSuggestions([]);
+        if (res.ok) {
+          const text = await res.text();
+          const data = text ? JSON.parse(text) : [];
+          if (Array.isArray(data) && data.length > 0) {
+            setSuggestions(data);
+            setShowSuggestions(true);
+          } else {
+            setSuggestions([]);
+          }
         }
       } catch (err) {
-        console.error('Failed to fetch suggestions:', err);
+        console.warn('Geocoding suggestion fetch skipped/failed:', err);
       } finally {
         setIsSearching(false);
       }
@@ -325,24 +328,29 @@ export const Map: React.FC<MapProps> = ({
                   
                   try {
                     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&email=contact@civix.gov.in&limit=1`);
-                    const data = await res.json();
-                    if (data && data.length > 0) {
-                      const first = data[0];
-                      const lat = parseFloat(first.lat);
-                      const lng = parseFloat(first.lon);
-                      
-                      skipFetchRef.current = true;
-                      setSearchQuery(first.display_name);
-                      
-                      // Center and zoom map to location first (synchronously sets Leaflet state)
-                      if (mapRef.current) {
-                        mapRef.current.setView([lat, lng], 16);
-                      }
+                    if (res.ok) {
+                      const text = await res.text();
+                      const data = text ? JSON.parse(text) : [];
+                      if (Array.isArray(data) && data.length > 0) {
+                        const first = data[0];
+                        const lat = parseFloat(first.lat);
+                        const lng = parseFloat(first.lon);
+                        
+                        skipFetchRef.current = true;
+                        setSearchQuery(first.display_name);
+                        
+                        // Center and zoom map to location first (synchronously sets Leaflet state)
+                        if (mapRef.current) {
+                          mapRef.current.setView([lat, lng], 16);
+                        }
 
-                      // Trigger selection to update parent state
-                      onPointSelectRef.current?.(lat, lng);
+                        // Trigger selection to update parent state
+                        onPointSelectRef.current?.(lat, lng);
+                      } else {
+                        alert('Location not found. Try another search.');
+                      }
                     } else {
-                      alert('Location not found. Try another search.');
+                      alert('Location service returned an error. Try another search.');
                     }
                   } catch (err) {
                     console.error('Search failed:', err);

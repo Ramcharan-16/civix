@@ -362,6 +362,16 @@ app.get(['/whatsapp/qr', '/api/whatsapp/qr'], (req, res) => {
   `);
 });
 
+// Root service index
+app.get(['/', '/api'], (req, res) => {
+  res.json({
+    service: 'Civix Municipal Grievance Platform API',
+    status: 'online',
+    version: '1.0.0',
+    time: new Date()
+  });
+});
+
 // Health check
 app.get(['/health', '/api/health'], (req, res) => {
   res.json({ status: 'ok', service: 'civix-api', time: new Date() });

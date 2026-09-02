@@ -67,6 +67,14 @@ function wrapResponseWithSafeJson(response: Response): Response {
   return response;
 }
 
+function get405ErrorMessage(): string {
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (isLocal) {
+    return 'API server unreachable (405 Method Not Allowed). Please ensure the backend server is running on port 5000 via "pnpm dev".';
+  }
+  return 'Backend API unreachable (405 Method Not Allowed). The static host rejected the API route. Please ensure the backend is deployed and VITE_API_URL is set in your deployment environment variables, or check vercel.json rewrites.';
+}
+
 async function executeSmartFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
   const targetUrl = getApiUrl(endpoint);
   let res: Response;
@@ -80,19 +88,21 @@ async function executeSmartFetch(endpoint: string, options: RequestInit = {}): P
         return await fetch(directUrl, options);
       } catch {}
     }
-    throw new Error(`Server connection failed. Please ensure the backend server is running on port 5000 (${err.message || 'offline'}).`);
+    throw new Error(`Server connection failed. ${err.message || 'Service offline'}.`);
   }
 
-  // If static server responded with 405 (Method Not Allowed - e.g. Vite static server without proxy)
-  if (res.status === 405 && typeof window !== 'undefined' && !targetUrl.startsWith('http') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    try {
-      const directUrl = `http://localhost:5000${targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`}`;
-      const directRes = await fetch(directUrl, options);
-      if (directRes.status !== 405) {
-        return directRes;
-      }
-    } catch {}
-    throw new Error('API server unreachable (405 Method Not Allowed). Please ensure the backend API is running on port 5000 via "pnpm dev".');
+  // If static server responded with 405 (Method Not Allowed - e.g. static host or Vite without proxy)
+  if (res.status === 405) {
+    if (typeof window !== 'undefined' && !targetUrl.startsWith('http') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      try {
+        const directUrl = `http://localhost:5000${targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`}`;
+        const directRes = await fetch(directUrl, options);
+        if (directRes.status !== 405) {
+          return directRes;
+        }
+      } catch {}
+    }
+    throw new Error(get405ErrorMessage());
   }
 
   return res;
@@ -146,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res.ok) {
       if (res.status === 405) {
-        throw new Error('API server unreachable (405 Method Not Allowed). Please ensure the backend server is running on port 5000 via "pnpm dev".');
+        throw new Error(get405ErrorMessage());
       }
       const errorData = await safeJsonParse(res, { error: `Server error (${res.status})` });
       throw new Error(errorData.error || errorData.message || 'Login failed');
@@ -173,7 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res.ok) {
       if (res.status === 405) {
-        throw new Error('API server unreachable (405 Method Not Allowed). Please ensure the backend server is running on port 5000 via "pnpm dev".');
+        throw new Error(get405ErrorMessage());
       }
       const errorData = await safeJsonParse(res, { error: `Registration error (${res.status})` });
       throw new Error(errorData.error || errorData.message || 'Registration failed');

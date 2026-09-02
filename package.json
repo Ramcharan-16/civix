@@ -9,7 +9,7 @@
     "dev:web": "pnpm --filter web dev",
     "dev:ai": "pnpm --filter ai-service dev",
     "build": "pnpm --filter database exec prisma generate && pnpm --filter api build && pnpm --filter web build",
-    "build:api": "pnpm --filter database exec prisma generate && pnpm --filter api build",
+    "build:api": "pnpm --filter database exec prisma generate && npx puppeteer browsers install chrome && pnpm --filter api build",
     "build:web": "pnpm --filter web build",
     "start:api": "pnpm --filter api start",
     "db:migrate": "pnpm --filter database migrate",

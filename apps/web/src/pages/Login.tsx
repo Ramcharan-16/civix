@@ -107,12 +107,13 @@ export const Login: React.FC<LoginProps> = ({ isOfficial, onSwitchPortal, onSwit
 
       {/* Main Perspective Container */}
       <div 
-        className="auth-perspective-wrap animate-fade-in"
+        className="auth-perspective-wrap"
         style={{
+          display: isExploreMode ? 'none' : 'block',
           opacity: isExploreMode ? 0 : 1,
           pointerEvents: isExploreMode ? 'none' : 'auto',
           transform: isExploreMode ? 'scale(0.85) translateY(40px)' : 'scale(1) translateY(0)',
-          transition: 'all 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+          transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
         <div

@@ -1,11 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { 
-  Activity, 
   Compass, 
   Minimize2, 
-  Sparkles,
-  Zap
+  Sparkles
 } from 'lucide-react';
 
 interface City3DCanvasProps {
@@ -14,23 +12,12 @@ interface City3DCanvasProps {
   onToggleExplore?: () => void;
 }
 
-interface HoveredBuildingInfo {
-  name: string;
-  category: string;
-  status: string;
-  metric: string;
-  ward: string;
-  screenX: number;
-  screenY: number;
-}
-
 export const City3DCanvas: React.FC<City3DCanvasProps> = ({ 
   isOfficial = false,
   isExploreMode = false,
   onToggleExplore
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hoveredBuilding, setHoveredBuilding] = useState<HoveredBuildingInfo | null>(null);
 
   // Keep references for event listeners and state synchronization
   const isOfficialRef = useRef(isOfficial);
@@ -211,27 +198,6 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
     const buildingWireframes: THREE.LineSegments[] = [];
     const beacons: THREE.Mesh[] = [];
 
-    // Building metadata generator for raycaster hover HUD
-    const buildingNames = isOfficial ? [
-      { name: 'Municipal Command Telemetry', category: 'High-Command Operations', ward: 'Central Ward 1', metric: '100% Core Uplink Active' },
-      { name: 'GHMC Rapid Dispatch Center', category: 'Emergency Response', ward: 'Ward 4 - Secunderabad', metric: '18 Field Units On Route' },
-      { name: 'HMWSSB Pressure Grid Node', category: 'Water & Utilities', ward: 'Ward 8 - North Feeder', metric: '6.2 Bar Nominal' },
-      { name: 'TSSPDCL Smart Substation #4', category: 'Electrical Grid', ward: 'Ward 3 - East Subgrid', metric: '99.4% Grid Reliability' },
-      { name: 'Integrated Traffic Command Hub', category: 'Smart Mobility', ward: 'Ward 7 - Arterial Loop', metric: 'Autonomous Signal Sync' },
-      { name: 'Civix Environmental Sensor Bank', category: 'AQI & Clean Air', ward: 'Ward 5 - Metro Green', metric: 'AQI 58 • Good' },
-      { name: 'Civic Grievance Resolution Desk', category: 'SLA Governance', ward: 'Ward 2 - West Corridor', metric: 'Avg Resolution 4.2h' },
-      { name: 'Sanitation Logistics Terminal', category: 'Solid Waste Management', ward: 'Ward 6 - Logistics Hub', metric: '42 Vehicles Tracked' }
-    ] : [
-      { name: 'Ward 14 Civic Telemetry Hub', category: 'Community Operations', ward: 'Ward 14 - Secunderabad', metric: 'Live Resident Feed Connected' },
-      { name: 'HMWSSB Water Monitoring Station', category: 'Clean Water Pipeline', ward: 'Main Lane Ward 14', metric: 'Water Pressure 100% Restored' },
-      { name: 'Green Mobility Electric Corridor', category: 'Eco Infrastructure', ward: 'Outer Ring Corridor', metric: '24 EV Chargers Available' },
-      { name: 'Neighborhood Action Center', category: 'Citizen Engagement', ward: 'Community Plaza 2', metric: '12 Active Local Petitions' },
-      { name: 'Civix Autonomous AI Triage Tower', category: 'Real-time AI Assist', ward: 'Telemetry Node #9', metric: 'Sub-3s Issue Routing' },
-      { name: 'Municipal Public Health Tower', category: 'Healthcare & Sanitization', ward: 'Central Zone', metric: 'All Ward Clinics Open' },
-      { name: 'Smart Solar Rooftop Cluster', category: 'Clean Energy', ward: 'Rooftop Grid Tier-A', metric: '1.4 MW Generated Today' },
-      { name: 'Community Emergency Beacon', category: 'SOS & Public Safety', ward: 'Secunderabad Junction', metric: 'Instant SOS Line Live' }
-    ];
-
     // Shared Materials
     const sharedBuildingMat = new THREE.MeshPhongMaterial({
       color: currentTheme.buildingBody,
@@ -251,7 +217,6 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
 
     const cityRadius = 5;
     const blockSpacing = 8.5;
-    let nameIdx = 0;
 
     for (let x = -cityRadius; x <= cityRadius; x++) {
       for (let z = -cityRadius; z <= cityRadius; z++) {
@@ -275,16 +240,6 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
         const boxGeo = new THREE.BoxGeometry(width, height, depth);
         const buildingMesh = new THREE.Mesh(boxGeo, sharedBuildingMat.clone());
         buildingMesh.position.set(posX, height / 2, posZ);
-
-        // Attach metadata for raycaster hover
-        const meta = buildingNames[nameIdx % buildingNames.length];
-        nameIdx++;
-        buildingMesh.userData = {
-          ...meta,
-          defaultColor: currentTheme.buildingBody,
-          highlightColor: currentTheme.buildingHighlight,
-          height: height
-        };
 
         buildingGroup.add(buildingMesh);
         interactiveBuildings.push(buildingMesh);
@@ -342,12 +297,6 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
     const hqMesh = new THREE.Mesh(hqGeo, hqMat);
     hqMesh.position.set(0, hqHeight / 2, 0);
     hqMesh.userData = {
-      name: isOfficial ? 'Civix Apex Command Monolith' : 'Civix Central Digital Twin Spire',
-      category: 'Municipal Core HQ',
-      ward: 'Ward Central - Apex Command',
-      metric: 'Telemetry Synchronized • 100% Operational',
-      defaultColor: isOfficial ? 0x221307 : 0x071529,
-      highlightColor: currentTheme.primary,
       height: hqHeight
     };
     buildingGroup.add(hqMesh);
@@ -497,20 +446,16 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
     const floatingEmbers = new THREE.Points(particleGeo, particleMat);
     scene.add(floatingEmbers);
 
-    // --- Interactive Mouse Raycasting & Hover Telemetry ---
+    // --- Interactive Mouse Parallax & Building Edge Glow ---
     const raycaster = new THREE.Raycaster();
     const mouseNorm = new THREE.Vector2(0, 0);
     let currentlyHoveredMesh: THREE.Mesh | null = null;
 
-    let mouseClientX = window.innerWidth / 2;
-    let mouseClientY = window.innerHeight / 2;
     let targetCamX = 0;
     let targetCamY = 52;
     let targetCamZ = 75;
 
     const onPointerMove = (e: MouseEvent) => {
-      mouseClientX = e.clientX;
-      mouseClientY = e.clientY;
       mouseNorm.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouseNorm.y = -(e.clientY / window.innerHeight) * 2 + 1;
     };
@@ -598,7 +543,7 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
       }
       particleGeo.attributes.position.needsUpdate = true;
 
-      // Raycasting for Building Hover Highlighting
+      // Raycasting for Building Hover Edge Highlighting (Pure clean visual effect, no text tooltips)
       raycaster.setFromCamera(mouseNorm, camera);
       const intersects = raycaster.intersectObjects(interactiveBuildings, false);
 
@@ -621,16 +566,6 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
             (wire.material as THREE.LineBasicMaterial).color.setHex(0xffffff);
             (wire.material as THREE.LineBasicMaterial).opacity = 1.0;
           }
-
-          setHoveredBuilding({
-            name: hit.userData.name,
-            category: hit.userData.category,
-            status: 'Telemetry Live • Monitored',
-            metric: hit.userData.metric,
-            ward: hit.userData.ward,
-            screenX: mouseClientX,
-            screenY: mouseClientY
-          });
         }
       } else {
         if (currentlyHoveredMesh) {
@@ -640,7 +575,6 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
             (wire.material as THREE.LineBasicMaterial).opacity = 0.55;
           }
           currentlyHoveredMesh = null;
-          setHoveredBuilding(null);
         }
       }
 
@@ -764,71 +698,6 @@ export const City3DCanvas: React.FC<City3DCanvasProps> = ({
             </>
           )}
         </button>
-      )}
-
-      {/* Floating Holographic Hover HUD Popover on Building Raycast */}
-      {hoveredBuilding && (
-        <div
-          className="city-hover-hud animate-fade-in"
-          style={{
-            position: 'fixed',
-            left: `${Math.min(hoveredBuilding.screenX + 18, window.innerWidth - 270)}px`,
-            top: `${Math.max(hoveredBuilding.screenY - 80, 20)}px`,
-            zIndex: 40,
-            pointerEvents: 'none',
-            width: '250px',
-            background: isOfficial ? 'rgba(24, 14, 6, 0.92)' : 'rgba(8, 18, 36, 0.92)',
-            backdropFilter: 'blur(20px)',
-            border: isOfficial ? '1px solid rgba(245, 158, 11, 0.45)' : '1px solid rgba(56, 189, 248, 0.45)',
-            borderRadius: '14px',
-            padding: '12px 14px',
-            boxShadow: isOfficial 
-              ? '0 12px 35px rgba(0, 0, 0, 0.8), 0 0 20px rgba(245, 158, 11, 0.25)' 
-              : '0 12px 35px rgba(0, 0, 0, 0.8), 0 0 20px rgba(56, 189, 248, 0.25)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-            <span 
-              style={{ 
-                fontSize: '0.66rem', 
-                fontWeight: 800, 
-                textTransform: 'uppercase', 
-                letterSpacing: '0.5px',
-                color: isOfficial ? '#fbbf24' : '#38bdf8' 
-              }}
-            >
-              {hoveredBuilding.category}
-            </span>
-            <span style={{ fontSize: '0.66rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-              <Activity size={10} /> Live
-            </span>
-          </div>
-
-          <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f8fafc', margin: '0 0 4px 0', lineHeight: 1.2 }}>
-            {hoveredBuilding.name}
-          </h4>
-
-          <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '6px' }}>
-            📍 {hoveredBuilding.ward}
-          </div>
-
-          <div 
-            style={{ 
-              padding: '6px 8px', 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              borderRadius: '8px',
-              fontSize: '0.72rem',
-              color: isOfficial ? '#fef08a' : '#bae6fd',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px'
-            }}
-          >
-            <Zap size={12} color={isOfficial ? '#f59e0b' : '#38bdf8'} />
-            <span>{hoveredBuilding.metric}</span>
-          </div>
-        </div>
       )}
     </>
   );

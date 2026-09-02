@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://civix-murex.vercel.app/sitemap.xml

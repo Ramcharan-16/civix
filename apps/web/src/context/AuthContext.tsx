@@ -67,6 +67,37 @@ function wrapResponseWithSafeJson(response: Response): Response {
   return response;
 }
 
+async function executeSmartFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const targetUrl = getApiUrl(endpoint);
+  let res: Response;
+  try {
+    res = await fetch(targetUrl, options);
+  } catch (err: any) {
+    // If request to relative proxy failed, attempt direct port 5000 in dev
+    if (typeof window !== 'undefined' && !targetUrl.startsWith('http') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      try {
+        const directUrl = `http://localhost:5000${targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`}`;
+        return await fetch(directUrl, options);
+      } catch {}
+    }
+    throw new Error(`Server connection failed. Please ensure the backend server is running on port 5000 (${err.message || 'offline'}).`);
+  }
+
+  // If static server responded with 405 (Method Not Allowed - e.g. Vite static server without proxy)
+  if (res.status === 405 && typeof window !== 'undefined' && !targetUrl.startsWith('http') && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    try {
+      const directUrl = `http://localhost:5000${targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`}`;
+      const directRes = await fetch(directUrl, options);
+      if (directRes.status !== 405) {
+        return directRes;
+      }
+    } catch {}
+    throw new Error('API server unreachable (405 Method Not Allowed). Please ensure the backend API is running on port 5000 via "pnpm dev".');
+  }
+
+  return res;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('civix_token'));
   const [user, setUser] = useState<User | null>(null);
@@ -78,7 +109,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const storedToken = localStorage.getItem('civix_token');
       if (storedToken) {
         try {
-          const res = await fetch(getApiUrl('/api/users/me'), {
+          const res = await executeSmartFetch('/api/users/me', {
             headers: {
               'Authorization': `Bearer ${storedToken}`
             }
@@ -107,18 +138,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, password: string): Promise<User> => {
-    let res: Response;
-    try {
-      res = await fetch(getApiUrl('/api/auth/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-    } catch (netErr: any) {
-      throw new Error(`Server connection failed. Please ensure the backend server is running (${netErr.message || 'offline'}).`);
-    }
+    const res = await executeSmartFetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
 
     if (!res.ok) {
+      if (res.status === 405) {
+        throw new Error('API server unreachable (405 Method Not Allowed). Please ensure the backend server is running on port 5000 via "pnpm dev".');
+      }
       const errorData = await safeJsonParse(res, { error: `Server error (${res.status})` });
       throw new Error(errorData.error || errorData.message || 'Login failed');
     }
@@ -136,18 +165,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (name: string, email: string, phone: string, password: string, role?: Role) => {
-    let res: Response;
-    try {
-      res = await fetch(getApiUrl('/api/auth/register'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, password, role })
-      });
-    } catch (netErr: any) {
-      throw new Error(`Server connection failed. Please ensure the backend server is running (${netErr.message || 'offline'}).`);
-    }
+    const res = await executeSmartFetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, phone, password, role })
+    });
 
     if (!res.ok) {
+      if (res.status === 405) {
+        throw new Error('API server unreachable (405 Method Not Allowed). Please ensure the backend server is running on port 5000 via "pnpm dev".');
+      }
       const errorData = await safeJsonParse(res, { error: `Registration error (${res.status})` });
       throw new Error(errorData.error || errorData.message || 'Registration failed');
     }
@@ -172,7 +199,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Wrapper for authenticated API requests
   const apiFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
-    const targetUrl = getApiUrl(url);
     const headers = new Headers(options.headers || {});
     
     // Auto attach token
@@ -187,14 +213,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let response: Response;
     try {
-      response = await fetch(targetUrl, {
+      response = await executeSmartFetch(url, {
         ...options,
         headers
       });
     } catch (netErr: any) {
       console.warn(`[apiFetch] Network connection failure for ${url}:`, netErr);
       // Return a synthesized synthetic response to prevent uncaught promise rejection
-      return wrapResponseWithSafeJson(new Response(JSON.stringify({ error: 'Network request failed. Service unreachable.' }), {
+      return wrapResponseWithSafeJson(new Response(JSON.stringify({ error: netErr.message || 'Network request failed. Service unreachable.' }), {
         status: 503,
         statusText: 'Service Unavailable',
         headers: { 'Content-Type': 'application/json' }
@@ -206,7 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const refreshToken = localStorage.getItem('civix_refresh_token');
       if (refreshToken) {
         try {
-          const refreshRes = await fetch(getApiUrl('/api/auth/refresh'), {
+          const refreshRes = await executeSmartFetch('/api/auth/refresh', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ refreshToken })
@@ -223,7 +249,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               
               // Retry request with new token
               headers.set('Authorization', `Bearer ${data.accessToken}`);
-              const retryResponse = await fetch(targetUrl, { ...options, headers });
+              const retryResponse = await executeSmartFetch(url, { ...options, headers });
               return wrapResponseWithSafeJson(retryResponse);
             }
           }

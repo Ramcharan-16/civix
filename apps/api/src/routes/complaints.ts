@@ -728,6 +728,7 @@ router.post('/:id/progress', authenticate, authorize([Role.STAFF]), async (req: 
       message: `Officer ${req.user!.name} updated #${complaint.complaintNumber} to ${pctNum}% (${stageName}). Notes: "${description || 'Work in progress'}". Expected completion: ${estimatedTimeframe || 'On Schedule'}`,
       complaintId: complaint.id,
       eventType: 'PROGRESS_UPDATE',
+      progressPercentage: pctNum,
       remarks: `Progress: ${pctNum}% (${stageName}). ${description || 'Work in progress'}`
     });
 

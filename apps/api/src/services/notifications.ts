@@ -10,11 +10,12 @@ export interface NotificationPayload {
   complaintId?: string;
   eventType?: 'REGISTERED' | 'STATUS_UPDATE' | 'PROGRESS_UPDATE' | 'ASSIGNED' | 'RESOLVED' | 'REOPENED';
   remarks?: string;
+  progressPercentage?: number;
   sendExternal?: boolean;
 }
 
 export async function sendNotification(payload: NotificationPayload): Promise<boolean> {
-  const { userId, title, message, complaintId, eventType, remarks, type, sendExternal } = payload;
+  const { userId, title, message, complaintId, eventType, remarks, type, progressPercentage, sendExternal } = payload;
 
   try {
     // 1. Create in-app database notification for the target user (citizen or staff)
@@ -63,6 +64,7 @@ export async function sendNotification(payload: NotificationPayload): Promise<bo
                 severity: complaint.severity,
                 departmentName: complaint.assignedDepartment?.name,
                 staffName: complaint.assignedStaff?.name,
+                progressPercentage: progressPercentage,
                 updateRemarks: remarks || message
               }
             };

@@ -67,7 +67,7 @@ export function initWhatsAppWebClient() {
     });
 
     client.on('authenticated', () => {
-      console.log('[WhatsAppWeb] WhatsApp Authenticated Successfully! Session saved locally.');
+      console.log('[WhatsAppWeb] WhatsApp Authenticated Successfully! Permanent session saved locally in .wwebjs_auth.');
     });
 
     client.on('auth_failure', (msg) => {
@@ -77,14 +77,26 @@ export function initWhatsAppWebClient() {
     });
 
     client.on('disconnected', (reason) => {
-      console.warn('[WhatsAppWeb] WhatsApp Client Disconnected:', reason);
+      console.warn('[WhatsAppWeb] WhatsApp Client Disconnected (reason: ' + reason + '). Auto-reconnecting in 5s...');
       isClientReady = false;
       clientInitStarted = false;
+      setTimeout(() => {
+        if (!isClientReady) {
+          console.log('[WhatsAppWeb] 🔄 Auto-reconnecting using persistent LocalAuth session...');
+          initWhatsAppWebClient();
+        }
+      }, 5000);
     });
 
     client.initialize().catch((err) => {
       console.error('[WhatsAppWeb] Error during client.initialize():', err.message);
       clientInitStarted = false;
+      setTimeout(() => {
+        if (!isClientReady) {
+          console.log('[WhatsAppWeb] 🔄 Retrying initialization with saved session...');
+          initWhatsAppWebClient();
+        }
+      }, 8000);
     });
   } catch (err: any) {
     console.error('[WhatsAppWeb] Failed to start WhatsApp Web Client:', err.message);

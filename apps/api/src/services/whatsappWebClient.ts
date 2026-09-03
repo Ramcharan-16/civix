@@ -38,7 +38,8 @@ export function initWhatsAppWebClient() {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
-          '--disable-gpu'
+          '--disable-gpu',
+          '--disable-features=IsolateOrigins,site-per-process'
         ]
       }
     });
@@ -160,7 +161,8 @@ export async function resetWhatsAppSession(): Promise<{ success: boolean; messag
 
 export async function sendViaWhatsAppWeb(
   recipientPhone: string,
-  message: string
+  message: string,
+  retryCount = 0
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   if (!client || !isClientReady) {
     return { success: false, error: 'WhatsApp Web client is not ready. Please scan QR code at http://localhost:5000/whatsapp/qr' };
@@ -181,7 +183,7 @@ export async function sendViaWhatsAppWeb(
     // Fast promise race to prevent hanging
     const sendPromise = client.sendMessage(targetChatId, message);
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('WhatsApp Web sendMessage timeout (6s)')), 6000)
+      setTimeout(() => reject(new Error('WhatsApp Web sendMessage timeout (8s)')), 8000)
     );
 
     const sentMsg: any = await Promise.race([sendPromise, timeoutPromise]);
@@ -189,7 +191,12 @@ export async function sendViaWhatsAppWeb(
     console.log(`[WhatsAppWeb] ✅ Message DELIVERED from +${senderNumber} to ${cleanNumber}! ID: ${msgId}`);
     return { success: true, id: msgId };
   } catch (err: any) {
-    console.error(`[WhatsAppWeb] Failed to send to ${recipientPhone}:`, err.message);
+    console.warn(`[WhatsAppWeb] Warning on send to ${recipientPhone} (attempt ${retryCount + 1}):`, err.message);
+    if (retryCount < 2 && client && isClientReady) {
+      console.log(`[WhatsAppWeb] 🔄 Retrying dispatch in 1.2s...`);
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      return sendViaWhatsAppWeb(recipientPhone, message, retryCount + 1);
+    }
     return { success: false, error: err.message };
   }
 }

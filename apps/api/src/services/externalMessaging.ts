@@ -443,6 +443,7 @@ export async function sendWhatsAppDirectMessage(
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(3500),
         body: JSON.stringify({
           chatId: `${rawPhone}@c.us`,
           message: messageBody
@@ -494,6 +495,7 @@ export async function sendWhatsAppDirectMessage(
           Authorization: `Basic ${authHeader}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         },
+        signal: AbortSignal.timeout(3500),
         body: params.toString()
       });
 

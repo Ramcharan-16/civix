@@ -28,42 +28,131 @@ function generateTokens(user: { id: string; email: string; role: Role; name: str
   return { accessToken, refreshToken };
 }
 
+let cachedDefaultDepartmentId: string | null = null;
+let lastDeptCacheTimestamp = 0;
+
+async function resolveDepartmentId(requestedDeptId?: string): Promise<string | null> {
+  if (requestedDeptId) return requestedDeptId;
+  const now = Date.now();
+  if (cachedDefaultDepartmentId && (now - lastDeptCacheTimestamp < 300000)) {
+    return cachedDefaultDepartmentId;
+  }
+  const dept = await prisma.department.findFirst({ select: { id: true } });
+  if (dept) {
+    cachedDefaultDepartmentId = dept.id;
+    lastDeptCacheTimestamp = now;
+    return dept.id;
+  }
+  return null;
+}
+
 async function findUserAcrossTables(identifier: string) {
   if (!identifier) return null;
   const rawIdentifier = identifier.trim();
+  const lowerIdentifier = rawIdentifier.toLowerCase();
   const digits = rawIdentifier.replace(/[^0-9]/g, '');
+  const isEmail = lowerIdentifier.includes('@');
   const isPhone = digits.length >= 7;
   const last10Digits = digits.length >= 10 ? digits.slice(-10) : digits;
 
-  // Build match conditions for email and phone
-  const searchConditions: any[] = [{ email: rawIdentifier }];
-  if (isPhone) {
-    searchConditions.push({ phone: { contains: last10Digits } });
+  // 1. Ultra-fast path: If identifier is an email, use direct indexed B-Tree unique lookups
+  if (isEmail) {
+    const [citizen, staff, deptAdmin, superAdmin] = await Promise.all([
+      prisma.citizen.findUnique({ where: { email: lowerIdentifier } }),
+      prisma.staffMember.findUnique({ where: { email: lowerIdentifier } }),
+      prisma.departmentAdmin.findUnique({ where: { email: lowerIdentifier } }),
+      prisma.superAdmin.findUnique({ where: { email: lowerIdentifier } })
+    ]);
+
+    if (citizen) return { ...citizen, role: Role.CITIZEN };
+    if (staff) return { ...staff, role: Role.STAFF };
+    if (deptAdmin) return { ...deptAdmin, role: Role.DEPARTMENT_ADMIN };
+    if (superAdmin) return { ...superAdmin, role: Role.SUPER_ADMIN };
+
+    return null;
   }
 
-  const citizen = await prisma.citizen.findFirst({
-    where: { OR: searchConditions }
-  });
+  // 2. Phone or Employee ID path
+  const phoneVariants = isPhone
+    ? Array.from(new Set([rawIdentifier, digits, last10Digits, `+91${last10Digits}`, `91${last10Digits}`, `+${digits}`]))
+    : [rawIdentifier];
+
+  const [citizen, staff, deptAdmin, superAdmin] = await Promise.all([
+    prisma.citizen.findFirst({
+      where: {
+        OR: [
+          { email: lowerIdentifier },
+          { phone: { in: phoneVariants } }
+        ]
+      }
+    }),
+    prisma.staffMember.findFirst({
+      where: {
+        OR: [
+          { email: lowerIdentifier },
+          { employeeId: rawIdentifier },
+          { phone: { in: phoneVariants } }
+        ]
+      }
+    }),
+    prisma.departmentAdmin.findFirst({
+      where: {
+        OR: [
+          { email: lowerIdentifier },
+          { employeeId: rawIdentifier },
+          { phone: { in: phoneVariants } }
+        ]
+      }
+    }),
+    prisma.superAdmin.findFirst({
+      where: {
+        OR: [
+          { email: lowerIdentifier },
+          { phone: { in: phoneVariants } }
+        ]
+      }
+    })
+  ]);
+
   if (citizen) return { ...citizen, role: Role.CITIZEN };
-
-  const staff = await prisma.staffMember.findFirst({
-    where: { OR: searchConditions },
-    include: { department: true }
-  });
   if (staff) return { ...staff, role: Role.STAFF };
-
-  const deptAdmin = await prisma.departmentAdmin.findFirst({
-    where: { OR: searchConditions },
-    include: { department: true }
-  });
   if (deptAdmin) return { ...deptAdmin, role: Role.DEPARTMENT_ADMIN };
-
-  const superAdmin = await prisma.superAdmin.findFirst({
-    where: { OR: searchConditions }
-  });
   if (superAdmin) return { ...superAdmin, role: Role.SUPER_ADMIN };
 
   return null;
+}
+
+async function checkUserExistsFast(email: string, phone?: string): Promise<boolean> {
+  const cleanEmail = email.trim().toLowerCase();
+  
+  // Direct indexed point lookups on unique email column across 4 tables in parallel
+  const [cEmail, sEmail, dEmail, saEmail] = await Promise.all([
+    prisma.citizen.findUnique({ where: { email: cleanEmail }, select: { id: true } }),
+    prisma.staffMember.findUnique({ where: { email: cleanEmail }, select: { id: true } }),
+    prisma.departmentAdmin.findUnique({ where: { email: cleanEmail }, select: { id: true } }),
+    prisma.superAdmin.findUnique({ where: { email: cleanEmail }, select: { id: true } })
+  ]);
+
+  if (cEmail || sEmail || dEmail || saEmail) return true;
+
+  if (phone) {
+    const rawPhone = phone.trim();
+    const digits = rawPhone.replace(/[^0-9]/g, '');
+    const last10Digits = digits.length >= 10 ? digits.slice(-10) : digits;
+    const phoneVariants = digits.length >= 7
+      ? Array.from(new Set([rawPhone, digits, last10Digits, `+91${last10Digits}`, `91${last10Digits}`, `+${digits}`]))
+      : [rawPhone];
+
+    const [cPhone, sPhone, dPhone] = await Promise.all([
+      prisma.citizen.findFirst({ where: { phone: { in: phoneVariants } }, select: { id: true } }),
+      prisma.staffMember.findFirst({ where: { phone: { in: phoneVariants } }, select: { id: true } }),
+      prisma.departmentAdmin.findFirst({ where: { phone: { in: phoneVariants } }, select: { id: true } })
+    ]);
+
+    if (cPhone || sPhone || dPhone) return true;
+  }
+
+  return false;
 }
 
 // POST /auth/register
@@ -76,44 +165,44 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    const existing = await findUserAcrossTables(email);
-    if (existing) {
-      res.status(400).json({ error: 'An account with this email already exists' });
+    // Run duplicate user check and password hashing concurrently with fast salt
+    const [alreadyExists, passwordHash] = await Promise.all([
+      checkUserExistsFast(email, phone),
+      bcrypt.hash(password, 8)
+    ]);
+
+    if (alreadyExists) {
+      res.status(400).json({ error: 'An account with this email or mobile number already exists' });
       return;
     }
-
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(password, salt);
 
     let targetRole: Role = Role.CITIZEN;
     if (role && Object.values(Role).includes(role)) {
       targetRole = role as Role;
     }
 
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
     let createdUser: { id: string; name: string; email: string; phone: string; role: Role };
 
     if (targetRole === Role.SUPER_ADMIN) {
       const sa = await prisma.superAdmin.create({
-        data: { name, email, phone, password, passwordHash, roleTitle: designation || 'Super Administrator' }
+        data: { name: name.trim(), email: cleanEmail, phone: cleanPhone, password, passwordHash, roleTitle: designation || 'Super Administrator' }
       });
       createdUser = { ...sa, role: Role.SUPER_ADMIN };
     } else if (targetRole === Role.DEPARTMENT_ADMIN) {
-      let deptId = departmentId;
-      if (!deptId) {
-        const firstDept = await prisma.department.findFirst();
-        deptId = firstDept?.id;
-      }
+      const deptId = await resolveDepartmentId(departmentId);
       if (!deptId) {
         res.status(400).json({ error: 'A valid department is required for Department Admin' });
         return;
       }
-      const count = await prisma.departmentAdmin.count();
+      const uniqueSuffix = `${Date.now().toString().slice(-4)}${Math.floor(100 + Math.random() * 900)}`;
       const da = await prisma.departmentAdmin.create({
         data: {
-          employeeId: employeeId || `DADM-${(count + 1).toString().padStart(3, '0')}`,
-          name,
-          email,
-          phone,
+          employeeId: employeeId || `DADM-${uniqueSuffix}`,
+          name: name.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
           password,
           passwordHash,
           departmentId: deptId,
@@ -122,22 +211,18 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
       });
       createdUser = { ...da, role: Role.DEPARTMENT_ADMIN };
     } else if (targetRole === Role.STAFF) {
-      let deptId = departmentId;
-      if (!deptId) {
-        const firstDept = await prisma.department.findFirst();
-        deptId = firstDept?.id;
-      }
+      const deptId = await resolveDepartmentId(departmentId);
       if (!deptId) {
         res.status(400).json({ error: 'A valid department is required for Staff' });
         return;
       }
-      const count = await prisma.staffMember.count();
+      const uniqueSuffix = `${Date.now().toString().slice(-4)}${Math.floor(100 + Math.random() * 900)}`;
       const staff = await prisma.staffMember.create({
         data: {
-          employeeId: employeeId || `STF-${(count + 1).toString().padStart(3, '0')}`,
-          name,
-          email,
-          phone,
+          employeeId: employeeId || `STF-${uniqueSuffix}`,
+          name: name.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
           password,
           passwordHash,
           departmentId: deptId,
@@ -148,26 +233,28 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     } else {
       const citizen = await prisma.citizen.create({
         data: {
-          name,
-          email,
-          phone,
+          name: name.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
           password,
           passwordHash,
-          address
+          address: address || null
         }
       });
       createdUser = { ...citizen, role: Role.CITIZEN };
     }
 
-    // Automatically send WhatsApp Welcome notification to the newly registered user's phone
+    // Fire WhatsApp Welcome notification in a detached background worker
     if (createdUser.phone) {
-      sendWelcomeWhatsAppNotification({
-        name: createdUser.name,
-        email: createdUser.email,
-        phone: createdUser.phone,
-        role: createdUser.role
-      }).catch((waErr) => {
-        console.warn('[AuthService] Welcome WhatsApp notification error:', waErr);
+      setImmediate(() => {
+        sendWelcomeWhatsAppNotification({
+          name: createdUser.name,
+          email: createdUser.email,
+          phone: createdUser.phone,
+          role: createdUser.role
+        }).catch((waErr) => {
+          console.warn('[AuthService] Welcome WhatsApp notification background error:', waErr);
+        });
       });
     }
 

@@ -15,7 +15,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<User>;
-  register: (name: string, email: string, phone: string, password: string, role?: Role) => Promise<void>;
+  register: (name: string, email: string, phone: string, password: string, role?: Role, departmentId?: string) => Promise<void>;
   logout: () => void;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
@@ -188,11 +188,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return data.user;
   };
 
-  const register = async (name: string, email: string, phone: string, password: string, role?: Role) => {
+  const register = async (name: string, email: string, phone: string, password: string, role?: Role, departmentId?: string) => {
     const res = await executeSmartFetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone, password, role })
+      body: JSON.stringify({ name, email, phone, password, role, departmentId })
     });
 
     if (!res.ok) {

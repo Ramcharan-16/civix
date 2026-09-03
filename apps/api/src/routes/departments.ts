@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { prisma } from '../prisma';
 import { authenticate, authorize, AuthenticatedRequest } from '../middleware/auth';
 import { Role } from '@civix/database';
@@ -6,12 +6,13 @@ import { Role } from '@civix/database';
 const router: Router = Router();
 
 // GET /departments - List departments & categories
-router.get('/', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     const departments = await prisma.department.findMany({
       include: {
         categories: true
-      }
+      },
+      orderBy: { name: 'asc' }
     });
     res.json(departments);
   } catch (error) {

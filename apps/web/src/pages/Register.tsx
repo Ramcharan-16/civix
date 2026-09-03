@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { useAuth, Role } from '../context/AuthContext';
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth, Role, getApiUrl } from '../context/AuthContext';
 import { City3DCanvas } from '../components/City3DCanvas';
 import { 
   LogIn, 
@@ -11,6 +11,7 @@ import {
   Eye, 
   EyeOff, 
   Briefcase, 
+  Building2,
   Radio, 
   ShieldCheck 
 } from 'lucide-react';
@@ -18,6 +19,11 @@ import {
 interface RegisterProps {
   isOfficial: boolean;
   onSwitchToLogin: () => void;
+}
+
+interface DepartmentOption {
+  id: string;
+  name: string;
 }
 
 export const Register: React.FC<RegisterProps> = ({ isOfficial, onSwitchToLogin }) => {
@@ -28,8 +34,31 @@ export const Register: React.FC<RegisterProps> = ({ isOfficial, onSwitchToLogin 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role>('STAFF');
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Pre-fetch departments for official account creation
+  useEffect(() => {
+    if (isOfficial) {
+      const fetchDepts = async () => {
+        try {
+          const res = await fetch(getApiUrl('/api/departments'));
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              setDepartments(data);
+              setSelectedDepartmentId(data[0].id);
+            }
+          }
+        } catch (e) {
+          // Graceful fallback
+        }
+      };
+      fetchDepts();
+    }
+  }, [isOfficial]);
 
   // 3D Card tilt on hover
   const cardRef = useRef<HTMLDivElement>(null);
@@ -66,7 +95,8 @@ export const Register: React.FC<RegisterProps> = ({ isOfficial, onSwitchToLogin 
         email,
         phone,
         password,
-        isOfficial ? selectedRole : 'CITIZEN'
+        isOfficial ? selectedRole : 'CITIZEN',
+        isOfficial && selectedDepartmentId ? selectedDepartmentId : undefined
       );
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please check inputs.');
@@ -248,34 +278,70 @@ export const Register: React.FC<RegisterProps> = ({ isOfficial, onSwitchToLogin 
 
             {/* Municipal Role (if Official) */}
             {isOfficial && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  Municipal Role & Assignment
-                </label>
-                <div className="auth-input-wrapper official">
-                  <Briefcase size={16} className="leading-icon" />
-                  <select
-                    value={selectedRole}
-                    onChange={(e) => setSelectedRole(e.target.value as Role)}
-                    style={{
-                      width: '100%',
-                      paddingLeft: '42px',
-                      paddingRight: '16px',
-                      height: '44px',
-                      borderRadius: '12px',
-                      backgroundColor: 'rgba(15, 23, 42, 0.7)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: 'white',
-                      fontSize: '0.9rem',
-                      outline: 'none',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="STAFF" style={{ backgroundColor: '#0f172a' }}>Field Staff / Officer</option>
-                    <option value="DEPARTMENT_ADMIN" style={{ backgroundColor: '#0f172a' }}>Department Administrator</option>
-                  </select>
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    Municipal Role & Assignment
+                  </label>
+                  <div className="auth-input-wrapper official">
+                    <Briefcase size={16} className="leading-icon" />
+                    <select
+                      value={selectedRole}
+                      onChange={(e) => setSelectedRole(e.target.value as Role)}
+                      style={{
+                        width: '100%',
+                        paddingLeft: '42px',
+                        paddingRight: '16px',
+                        height: '44px',
+                        borderRadius: '12px',
+                        backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: 'white',
+                        fontSize: '0.9rem',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="STAFF" style={{ backgroundColor: '#0f172a' }}>Field Staff / Officer</option>
+                      <option value="DEPARTMENT_ADMIN" style={{ backgroundColor: '#0f172a' }}>Department Administrator</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
+
+                {departments.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Assigned Department
+                    </label>
+                    <div className="auth-input-wrapper official">
+                      <Building2 size={16} className="leading-icon" />
+                      <select
+                        value={selectedDepartmentId}
+                        onChange={(e) => setSelectedDepartmentId(e.target.value)}
+                        style={{
+                          width: '100%',
+                          paddingLeft: '42px',
+                          paddingRight: '16px',
+                          height: '44px',
+                          borderRadius: '12px',
+                          backgroundColor: 'rgba(15, 23, 42, 0.7)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          color: 'white',
+                          fontSize: '0.9rem',
+                          outline: 'none',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {departments.map((dept) => (
+                          <option key={dept.id} value={dept.id} style={{ backgroundColor: '#0f172a' }}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Password */}

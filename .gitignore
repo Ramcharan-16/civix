@@ -27,3 +27,5 @@ Thumbs.db
 
 # Temp files
 scratch
+uploads
+apps/api/uploads

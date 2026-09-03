@@ -223,54 +223,36 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response):
   }
 
   try {
-    const complaintNumber = await generateComplaintNumber();
-    
+    const [complaintNumber, aiResult] = await Promise.all([
+      generateComplaintNumber(),
+      analyzeComplaint(title, description)
+    ]);
+
+    let resolvedCategoryId = categoryId;
+    if (aiResult.category) {
+      const matchedCategory = await prisma.category.findFirst({
+        where: { name: aiResult.category }
+      });
+      if (matchedCategory) {
+        resolvedCategoryId = matchedCategory.id;
+      }
+    }
+
     const complaint = await prisma.complaint.create({
       data: {
         complaintNumber,
         title,
         description,
-        categoryId,
+        categoryId: resolvedCategoryId,
         citizenId: req.user!.id,
         address,
         latitude: latitude ? parseFloat(latitude) : 12.971598,
         longitude: longitude ? parseFloat(longitude) : 77.594562,
-        status: ComplaintStatus.SUBMITTED
-      }
-    });
-
-    await prisma.statusLog.create({
-      data: {
-        complaintId: complaint.id,
-        oldStatus: 'DRAFT',
-        newStatus: 'SUBMITTED',
-        changedByName: req.user!.name,
-        comment: 'Complaint submitted by citizen.'
-      }
-    });
-
-    if (mediaUrl) {
-      await prisma.complaintMedia.create({
-        data: {
-          complaintId: complaint.id,
-          fileUrl: mediaUrl,
-          mimeType: 'image/jpeg'
-        }
-      });
-    }
-
-    const aiResult = await analyzeComplaint(title, description);
-
-    const matchedCategory = await prisma.category.findFirst({
-      where: { name: aiResult.category }
-    });
-
-    const updatedComplaint = await prisma.complaint.update({
-      where: { id: complaint.id },
-      data: {
-        ...(matchedCategory ? { categoryId: matchedCategory.id } : {}),
-        severity: aiResult.severity as Severity,
+        severity: (aiResult.severity as Severity) || Severity.MEDIUM,
         status: ComplaintStatus.PENDING_VERIFICATION
+      },
+      include: {
+        category: true
       }
     });
 
@@ -284,16 +266,26 @@ router.post('/', authenticate, async (req: AuthenticatedRequest, res: Response):
       }
     });
 
-    // Notify citizen that complaint was received via in-app, Email and WhatsApp
-    await sendNotification({
+    if (mediaUrl) {
+      await prisma.complaintMedia.create({
+        data: {
+          complaintId: complaint.id,
+          fileUrl: mediaUrl,
+          mimeType: 'image/jpeg'
+        }
+      });
+    }
+
+    // Notify citizen via In-App, Email and WhatsApp (non-blocking background queue)
+    sendNotification({
       userId: req.user!.id,
       title: 'Complaint Registered',
       message: `Your complaint #${complaintNumber} ("${title}") is registered and under review.`,
       complaintId: complaint.id,
       eventType: 'REGISTERED'
-    });
+    }).catch(err => console.warn('[ComplaintRoute] Background notification warning:', err));
 
-    res.status(201).json(updatedComplaint);
+    res.status(201).json(complaint);
   } catch (error) {
     console.error('Create complaint error:', error);
     res.status(500).json({ error: 'Failed to create complaint' });

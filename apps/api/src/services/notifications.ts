@@ -33,49 +33,51 @@ export async function sendNotification(payload: NotificationPayload): Promise<bo
     const shouldDispatchExternal = (eventType !== undefined || sendExternal === true) && !isInternalAlert;
 
     if (complaintId && shouldDispatchExternal) {
-      try {
-        const complaint = await prisma.complaint.findUnique({
-          where: { id: complaintId },
-          include: {
-            citizen: true,
-            category: true,
-            assignedDepartment: true,
-            assignedStaff: true
-          }
-        });
-
-        if (complaint && complaint.citizen && complaint.citizen.phone) {
-          const dispatchOpts: DispatchNotificationOptions = {
-            citizen: {
-              name: complaint.citizen.name,
-              email: complaint.citizen.email,
-              phone: complaint.citizen.phone
-            },
-            eventType: eventType || (complaint.status === 'RESOLVED' ? 'RESOLVED' : 'STATUS_UPDATE'),
-            complaint: {
-              complaintNumber: complaint.complaintNumber,
-              title: complaint.title,
-              description: complaint.description,
-              status: complaint.status,
-              category: complaint.category?.name,
-              severity: complaint.severity,
-              departmentName: complaint.assignedDepartment?.name,
-              staffName: complaint.assignedStaff?.name,
-              updateRemarks: remarks || message
+      // Dispatch in background asynchronously to prevent blocking HTTP API responses
+      setImmediate(async () => {
+        try {
+          const complaint = await prisma.complaint.findUnique({
+            where: { id: complaintId },
+            include: {
+              citizen: true,
+              category: true,
+              assignedDepartment: true,
+              assignedStaff: true
             }
-          };
+          });
 
-          // Await external dispatch to ensure delivery
-          await dispatchExternalCitizenNotification(dispatchOpts);
+          if (complaint && complaint.citizen && complaint.citizen.phone) {
+            const dispatchOpts: DispatchNotificationOptions = {
+              citizen: {
+                name: complaint.citizen.name,
+                email: complaint.citizen.email,
+                phone: complaint.citizen.phone
+              },
+              eventType: eventType || (complaint.status === 'RESOLVED' ? 'RESOLVED' : 'STATUS_UPDATE'),
+              complaint: {
+                complaintNumber: complaint.complaintNumber,
+                title: complaint.title,
+                description: complaint.description,
+                status: complaint.status,
+                category: complaint.category?.name,
+                severity: complaint.severity,
+                departmentName: complaint.assignedDepartment?.name,
+                staffName: complaint.assignedStaff?.name,
+                updateRemarks: remarks || message
+              }
+            };
+
+            await dispatchExternalCitizenNotification(dispatchOpts);
+          }
+        } catch (externalErr) {
+          console.warn('[NotificationService] Background external dispatch note:', externalErr);
         }
-      } catch (externalErr) {
-        console.warn('[NotificationService] Could not resolve complaint for external notification:', externalErr);
-      }
+      });
     }
 
     return true;
   } catch (error) {
-    console.error('[NotificationService] Error dispatching notification:', error);
+    console.error('[NotificationService] Error recording notification:', error);
     return false;
   }
 }
@@ -107,27 +109,33 @@ export async function notifyCitizenProgressUpdate(params: {
       }
     });
 
-    // External WhatsApp & Email notification
-    const dispatchOpts: DispatchNotificationOptions = {
-      citizen: {
-        name: complaint.citizen.name,
-        email: complaint.citizen.email,
-        phone: complaint.citizen.phone
-      },
-      eventType: 'PROGRESS_UPDATE',
-      complaint: {
-        complaintNumber: complaint.complaintNumber,
-        title: complaint.title,
-        status: complaint.status,
-        category: complaint.category?.name,
-        departmentName: complaint.assignedDepartment?.name,
-        staffName: params.staffName || complaint.assignedStaff?.name,
-        progressPercentage: params.progressPercentage,
-        updateRemarks: params.description
-      }
-    };
+    // External WhatsApp & Email notification in background
+    setImmediate(async () => {
+      try {
+        const dispatchOpts: DispatchNotificationOptions = {
+          citizen: {
+            name: complaint.citizen.name,
+            email: complaint.citizen.email,
+            phone: complaint.citizen.phone
+          },
+          eventType: 'PROGRESS_UPDATE',
+          complaint: {
+            complaintNumber: complaint.complaintNumber,
+            title: complaint.title,
+            status: complaint.status,
+            category: complaint.category?.name,
+            departmentName: complaint.assignedDepartment?.name,
+            staffName: params.staffName || complaint.assignedStaff?.name,
+            progressPercentage: params.progressPercentage,
+            updateRemarks: params.description
+          }
+        };
 
-    await dispatchExternalCitizenNotification(dispatchOpts);
+        await dispatchExternalCitizenNotification(dispatchOpts);
+      } catch (err) {
+        console.warn('[NotificationService] notifyCitizenProgressUpdate background dispatch note:', err);
+      }
+    });
   } catch (err) {
     console.error('[NotificationService] notifyCitizenProgressUpdate error:', err);
   }

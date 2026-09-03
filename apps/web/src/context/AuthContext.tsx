@@ -81,7 +81,7 @@ function get405ErrorMessage(): string {
   return 'Backend API connecting... (Render free tier server is waking up from sleep, please retry in 15 seconds).';
 }
 
-async function executeSmartFetch(endpoint: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
+async function executeSmartFetch(endpoint: string, options: RequestInit = {}, timeoutMs: number = 20000): Promise<Response> {
   const targetUrl = getApiUrl(endpoint);
   
   const controller = new AbortController();

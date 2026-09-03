@@ -383,15 +383,15 @@ function isDuplicateMessage(recipient: string, messageContent: string): boolean 
   const now = Date.now();
   const key = `${recipient}_${messageContent.trim()}`;
 
-  // Purge old entries (> 30s)
+  // Purge old entries (> 15s)
   for (const [k, timestamp] of sentMessageDedupCache.entries()) {
-    if (now - timestamp > 30000) {
+    if (now - timestamp > 15000) {
       sentMessageDedupCache.delete(k);
     }
   }
 
   const lastSent = sentMessageDedupCache.get(key);
-  if (lastSent && (now - lastSent) < 15000) {
+  if (lastSent && (now - lastSent) < 3000) {
     return true;
   }
 
@@ -399,7 +399,7 @@ function isDuplicateMessage(recipient: string, messageContent: string): boolean 
   return false;
 }
 
-import { sendViaWhatsAppWeb } from './whatsappWebClient';
+import { sendViaWhatsAppWeb, getWhatsAppStatus } from './whatsappWebClient';
 
 // ---------------------------------------------------------------------------
 // DIRECT LIVE WHATSAPP DISPATCHER
@@ -416,23 +416,13 @@ export async function sendWhatsAppDirectMessage(
     return { success: false };
   }
 
-  // Deduplication check: prevent identical messages within 15 seconds
+  // Deduplication check: prevent accidental double-clicks within 3 seconds
   if (isDuplicateMessage(rawPhone, messageBody)) {
-    console.log(`[WhatsAppService] 🛡️ Suppressed duplicate WhatsApp message to ${rawPhone} (Sent within 15s window).`);
+    console.log(`[WhatsAppService] 🛡️ Suppressed duplicate WhatsApp message to ${rawPhone} within 3s.`);
     return { success: true, simulated: true };
   }
 
-  // 1. Check WhatsApp Web Client (100% Free Unlimited Local Delivery)
-  try {
-    const webResult = await sendViaWhatsAppWeb(rawPhone, messageBody);
-    if (webResult.success) {
-      return { success: true, sid: webResult.id };
-    }
-  } catch (webErr: any) {
-    console.warn('[WhatsAppService] WhatsApp Web client not available, attempting fallbacks:', webErr.message);
-  }
-
-  // 2. Check Green-API (Instant WhatsApp Provider Fallback)
+  // 1. Check Green-API (Instant WhatsApp Cloud Provider)
   const greenApiId = process.env.GREEN_API_INSTANCE_ID || '710722723599';
   const greenApiToken = process.env.GREEN_API_API_TOKEN || 'd8079b96910e47c198a774588b1a7b23c3e77c36c1f44770b7';
 
@@ -443,7 +433,7 @@ export async function sendWhatsAppDirectMessage(
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(3500),
+        signal: AbortSignal.timeout(2500),
         body: JSON.stringify({
           chatId: `${rawPhone}@c.us`,
           message: messageBody
@@ -455,19 +445,31 @@ export async function sendWhatsAppDirectMessage(
         if (data && data.idMessage) {
           console.log(`[WhatsAppService] ✅ WhatsApp message DELIVERED to ${rawPhone} via Green-API! idMessage: ${data.idMessage}`);
           return { success: true, sid: data.idMessage };
+        } else if (data?.correspondentsStatus?.status === 'CORRESPONDENTS_QUOTE_EXCEEDED') {
+          console.log(`[WhatsAppService] ℹ️ Green-API trial limit notice: Recipient ${rawPhone} is not in developer trial correspondent list.`);
         } else {
-          console.warn(`[WhatsAppService] ⚠️ Green-API rejected delivery to ${rawPhone}. Response:`, JSON.stringify(data));
+          console.warn(`[WhatsAppService] ⚠️ Green-API note for ${rawPhone}:`, JSON.stringify(data));
         }
-      } else {
-        const errText = await response.text();
-        console.warn(`[WhatsAppService] Green-API returned error for ${rawPhone}:`, errText);
       }
     } catch (err: any) {
-      console.error('[WhatsAppService] Green-API connection error:', err.message);
+      console.warn('[WhatsAppService] Green-API dispatch note:', err.message);
     }
   }
 
-  // 2. Check Twilio Provider Fallback
+  // 2. Check WhatsApp Web Client (Local Session if Ready)
+  try {
+    const waStatus = getWhatsAppStatus();
+    if (waStatus.isReady) {
+      const webResult = await sendViaWhatsAppWeb(rawPhone, messageBody);
+      if (webResult.success) {
+        return { success: true, sid: webResult.id };
+      }
+    }
+  } catch (webErr: any) {
+    // Proceed to next fallback
+  }
+
+  // 3. Check Twilio Provider Fallback
   const twilioSid = process.env.TWILIO_ACCOUNT_SID;
   const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
   const twilioFrom = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+17372212163';
@@ -495,7 +497,7 @@ export async function sendWhatsAppDirectMessage(
           Authorization: `Basic ${authHeader}`,
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        signal: AbortSignal.timeout(3500),
+        signal: AbortSignal.timeout(2500),
         body: params.toString()
       });
 
@@ -505,7 +507,7 @@ export async function sendWhatsAppDirectMessage(
         return { success: true, sid: data.sid };
       }
     } catch (err: any) {
-      console.error('[WhatsAppService] Twilio error:', err.message);
+      console.warn('[WhatsAppService] Twilio dispatch note:', err.message);
     }
   }
 

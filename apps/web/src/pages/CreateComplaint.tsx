@@ -211,8 +211,8 @@ export const CreateComplaint: React.FC<CreateComplaintProps> = ({ onSuccess }) =
         const data = await res.json();
         setError(data.error || 'Failed to file complaint.');
       }
-    } catch (err) {
-      setError('Connection error. Failed to send data to server.');
+    } catch (err: any) {
+      setError(err?.message || 'Connection error. Failed to send data to server.');
     } finally {
       setLoading(false);
     }

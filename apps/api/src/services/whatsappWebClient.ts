@@ -16,6 +16,15 @@ function getAuthDirectory(): string {
 
 export function initWhatsAppWebClient() {
   if (clientInitStarted) return;
+
+  const isCloud = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+  const explicitlyEnabled = process.env.ENABLE_WHATSAPP_PUPPETEER === 'true';
+
+  if (isCloud && !explicitlyEnabled) {
+    console.log('[WhatsAppWeb] Running in cloud environment. Puppeteer WhatsApp-Web client bypassed to optimize memory (using instant Green-API / Twilio direct API).');
+    return;
+  }
+
   clientInitStarted = true;
 
   try {

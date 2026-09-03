@@ -44,8 +44,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, setSele
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      // Poll every 4 seconds for immediate live updates
-      const interval = setInterval(fetchNotifications, 4000);
+      // Poll every 12 seconds to maintain live updates without overloading network
+      const interval = setInterval(fetchNotifications, 12000);
       return () => clearInterval(interval);
     }
   }, [user]);

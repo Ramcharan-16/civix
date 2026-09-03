@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, Suspense, lazy } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { City3DCanvas } from '../components/City3DCanvas';
+
+const City3DCanvas = lazy(() => import('../components/City3DCanvas').then(m => ({ default: m.City3DCanvas })));
 import { 
   LogIn, 
   UserPlus, 
@@ -99,11 +100,13 @@ export const Login: React.FC<LoginProps> = ({ isOfficial, onSwitchPortal, onSwit
       }}
     >
       {/* Three.js 3D Digital Twin City Grid Background (Isometric Towers) */}
-      <City3DCanvas 
-        isOfficial={isOfficial} 
-        isExploreMode={isExploreMode}
-        onToggleExplore={() => setIsExploreMode(!isExploreMode)}
-      />
+      <Suspense fallback={null}>
+        <City3DCanvas 
+          isOfficial={isOfficial} 
+          isExploreMode={isExploreMode}
+          onToggleExplore={() => setIsExploreMode(!isExploreMode)}
+        />
+      </Suspense>
 
       {/* Main Perspective Container */}
       <div 

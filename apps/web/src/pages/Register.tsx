@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useAuth, Role, getApiUrl } from '../context/AuthContext';
-import { City3DCanvas } from '../components/City3DCanvas';
+
+const City3DCanvas = lazy(() => import('../components/City3DCanvas').then(m => ({ default: m.City3DCanvas })));
+
 import { 
   LogIn, 
   UserPlus, 
@@ -124,7 +126,9 @@ export const Register: React.FC<RegisterProps> = ({ isOfficial, onSwitchToLogin 
       }}
     >
       {/* Three.js 3D Digital Twin City Background */}
-      <City3DCanvas isOfficial={isOfficial} />
+      <Suspense fallback={null}>
+        <City3DCanvas isOfficial={isOfficial} />
+      </Suspense>
 
       {/* Perspective Wrap */}
       <div className="auth-perspective-wrap animate-fade-in" style={{ maxWidth: '490px' }}>

@@ -54,7 +54,7 @@ export const CitizenDashboard: React.FC<CitizenDashboardProps> = ({ onSelectComp
             setComplaints(data.complaints);
           }
         } catch (e) {}
-      }, 5000);
+      }, 15000);
       return () => clearInterval(interval);
     }
   }, [user]);

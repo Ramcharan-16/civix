@@ -38,6 +38,20 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       host: true,
       proxy: proxyConfig
+    },
+    build: {
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-leaflet': ['leaflet'],
+            'vendor-icons': ['lucide-react'],
+            'vendor-three': ['three']
+          }
+        }
+      }
     }
   };
 });
+

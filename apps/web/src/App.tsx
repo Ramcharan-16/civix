@@ -1,17 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { CitizenDashboard } from './pages/CitizenDashboard';
-import { PublicComplaints } from './pages/PublicComplaints';
-import { CreateComplaint } from './pages/CreateComplaint';
-import { StaffDashboard } from './pages/StaffDashboard';
-import { DeptAdminDashboard } from './pages/DeptAdminDashboard';
-import { SuperAdminDashboard } from './pages/SuperAdminDashboard';
-import { ComplaintDetail } from './pages/ComplaintDetail';
 import { LiveActivityTicker } from './components/LiveActivityTicker';
+
+// Code-split dashboard pages for fast initial bundle delivery
+const CitizenDashboard = lazy(() => import('./pages/CitizenDashboard').then(m => ({ default: m.CitizenDashboard })));
+const PublicComplaints = lazy(() => import('./pages/PublicComplaints').then(m => ({ default: m.PublicComplaints })));
+const CreateComplaint = lazy(() => import('./pages/CreateComplaint').then(m => ({ default: m.CreateComplaint })));
+const StaffDashboard = lazy(() => import('./pages/StaffDashboard').then(m => ({ default: m.StaffDashboard })));
+const DeptAdminDashboard = lazy(() => import('./pages/DeptAdminDashboard').then(m => ({ default: m.DeptAdminDashboard })));
+const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard').then(m => ({ default: m.SuperAdminDashboard })));
+const ComplaintDetail = lazy(() => import('./pages/ComplaintDetail').then(m => ({ default: m.ComplaintDetail })));
+
+const DashboardLoadingFallback: React.FC = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px', width: '100%' }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{
+        width: '32px',
+        height: '32px',
+        border: '3px solid rgba(56, 189, 248, 0.2)',
+        borderTop: '3px solid #38bdf8',
+        borderRadius: '50%',
+        animation: 'spin 0.8s linear infinite',
+        margin: '0 auto 12px'
+      }} />
+      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>Loading portal view...</p>
+    </div>
+  </div>
+);
 
 export const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -38,8 +57,17 @@ export const AppContent: React.FC = () => {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#020617' }}>
         <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontFamily: 'Outfit', fontWeight: 700, color: 'white', margin: 0 }}>Civix Platform</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Loading municipal assets...</p>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid rgba(56, 189, 248, 0.2)',
+            borderTop: '3px solid #38bdf8',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <h2 style={{ fontFamily: 'Outfit', fontWeight: 700, color: 'white', margin: '0 0 6px 0', fontSize: '1.25rem' }}>Civix Platform</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>Connecting municipal network...</p>
         </div>
       </div>
     );
@@ -83,76 +111,78 @@ export const AppContent: React.FC = () => {
 
         {/* Tab content routing */}
         <div style={{ flex: 1, padding: '0 24px 24px 24px', boxSizing: 'border-box' }}>
-          {activeTab === 'citizen-dash' && (
-            <CitizenDashboard
-              onSelectComplaint={(id) => {
-                setSelectedComplaintId(id);
-                setActiveTab('complaint-detail');
-              }}
-              onLodgeComplaint={() => setActiveTab('create-complaint')}
-            />
-          )}
+          <Suspense fallback={<DashboardLoadingFallback />}>
+            {activeTab === 'citizen-dash' && (
+              <CitizenDashboard
+                onSelectComplaint={(id) => {
+                  setSelectedComplaintId(id);
+                  setActiveTab('complaint-detail');
+                }}
+                onLodgeComplaint={() => setActiveTab('create-complaint')}
+              />
+            )}
 
-          {activeTab === 'public-complaints' && (
-            <PublicComplaints
-              onSelectComplaint={(id) => {
-                setSelectedComplaintId(id);
-                setActiveTab('complaint-detail');
-              }}
-            />
-          )}
+            {activeTab === 'public-complaints' && (
+              <PublicComplaints
+                onSelectComplaint={(id) => {
+                  setSelectedComplaintId(id);
+                  setActiveTab('complaint-detail');
+                }}
+              />
+            )}
 
-          {activeTab === 'create-complaint' && (
-            <CreateComplaint
-              onSuccess={() => setActiveTab('citizen-dash')}
-            />
-          )}
+            {activeTab === 'create-complaint' && (
+              <CreateComplaint
+                onSuccess={() => setActiveTab('citizen-dash')}
+              />
+            )}
 
-          {activeTab === 'staff-dash' && (
-            <StaffDashboard
-              onSelectComplaint={(id) => {
-                setSelectedComplaintId(id);
-                setActiveTab('complaint-detail');
-              }}
-            />
-          )}
+            {activeTab === 'staff-dash' && (
+              <StaffDashboard
+                onSelectComplaint={(id) => {
+                  setSelectedComplaintId(id);
+                  setActiveTab('complaint-detail');
+                }}
+              />
+            )}
 
-          {activeTab === 'dept-dash' && (
-            <DeptAdminDashboard
-              onSelectComplaint={(id) => {
-                setSelectedComplaintId(id);
-                setActiveTab('complaint-detail');
-              }}
-            />
-          )}
+            {activeTab === 'dept-dash' && (
+              <DeptAdminDashboard
+                onSelectComplaint={(id) => {
+                  setSelectedComplaintId(id);
+                  setActiveTab('complaint-detail');
+                }}
+              />
+            )}
 
-          {activeTab === 'super-dash' && (
-            <SuperAdminDashboard
-              onSelectComplaint={(id) => {
-                setSelectedComplaintId(id);
-                setActiveTab('complaint-detail');
-              }}
-            />
-          )}
+            {activeTab === 'super-dash' && (
+              <SuperAdminDashboard
+                onSelectComplaint={(id) => {
+                  setSelectedComplaintId(id);
+                  setActiveTab('complaint-detail');
+                }}
+              />
+            )}
 
-          {activeTab === 'complaint-detail' && selectedComplaintId && (
-            <ComplaintDetail
-              complaintId={selectedComplaintId}
-              onBack={() => {
-                // Return to appropriate tab based on role
-                if (user.role === 'SUPER_ADMIN') {
-                  setActiveTab('super-dash');
-                } else if (user.role === 'DEPARTMENT_ADMIN') {
-                  setActiveTab('dept-dash');
-                } else if (user.role === 'STAFF') {
-                  setActiveTab('staff-dash');
-                } else {
-                  setActiveTab('citizen-dash');
-                }
-                setSelectedComplaintId(null);
-              }}
-            />
-          )}
+            {activeTab === 'complaint-detail' && selectedComplaintId && (
+              <ComplaintDetail
+                complaintId={selectedComplaintId}
+                onBack={() => {
+                  // Return to appropriate tab based on role
+                  if (user.role === 'SUPER_ADMIN') {
+                    setActiveTab('super-dash');
+                  } else if (user.role === 'DEPARTMENT_ADMIN') {
+                    setActiveTab('dept-dash');
+                  } else if (user.role === 'STAFF') {
+                    setActiveTab('staff-dash');
+                  } else {
+                    setActiveTab('citizen-dash');
+                  }
+                  setSelectedComplaintId(null);
+                }}
+              />
+            )}
+          </Suspense>
         </div>
       </div>
     </div>

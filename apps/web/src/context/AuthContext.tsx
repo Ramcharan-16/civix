@@ -81,20 +81,34 @@ function get405ErrorMessage(): string {
   return 'Backend API connecting... (Render free tier server is waking up from sleep, please retry in 15 seconds).';
 }
 
-async function executeSmartFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+async function executeSmartFetch(endpoint: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
   const targetUrl = getApiUrl(endpoint);
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const fetchOptions: RequestInit = {
+    ...options,
+    signal: options.signal || controller.signal
+  };
+
   let res: Response;
   try {
-    res = await fetch(targetUrl, options);
+    res = await fetch(targetUrl, fetchOptions);
+    clearTimeout(timeoutId);
   } catch (err: any) {
-    // If request failed, attempt direct failover
+    clearTimeout(timeoutId);
+    // If request failed or timed out, attempt direct failover
     if (typeof window !== 'undefined') {
       const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const failoverBase = isLocal ? 'http://localhost:5000' : DEFAULT_PROD_API_URL;
       if (!targetUrl.startsWith(failoverBase)) {
         try {
           const directUrl = `${failoverBase}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-          return await fetch(directUrl, options);
+          const directController = new AbortController();
+          const directTimeout = setTimeout(() => directController.abort(), 6000);
+          const directRes = await fetch(directUrl, { ...options, signal: directController.signal });
+          clearTimeout(directTimeout);
+          return directRes;
         } catch {}
       }
     }
@@ -123,42 +137,51 @@ async function executeSmartFetch(endpoint: string, options: RequestInit = {}): P
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('civix_token'));
+  const [token, setToken] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('civix_token');
+    } catch {
+      return null;
+    }
+  });
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize and load user profile if token is present
   useEffect(() => {
+    let isMounted = true;
     const initAuth = async () => {
       const storedToken = localStorage.getItem('civix_token');
       if (storedToken) {
         try {
+          // Fast 5s timeout on initial check to prevent blocking page render if backend is sleeping
           const res = await executeSmartFetch('/api/users/me', {
             headers: {
               'Authorization': `Bearer ${storedToken}`
             }
-          });
+          }, 5000);
           if (res.ok) {
             const userData = await safeJsonParse(res, null);
-            if (userData && userData.id) {
+            if (isMounted && userData && userData.id) {
               setUser(userData);
               setToken(storedToken);
-            } else {
+            } else if (isMounted) {
               logout();
             }
-          } else {
+          } else if (isMounted) {
             // Token expired or invalid
             logout();
           }
         } catch (e) {
-          console.error('Failed to load profile during init:', e);
-          logout();
+          console.warn('Profile init note:', e);
+          if (isMounted) logout();
         }
       }
-      setLoading(false);
+      if (isMounted) setLoading(false);
     };
 
     initAuth();
+    return () => { isMounted = false; };
   }, []);
 
   const login = async (email: string, password: string): Promise<User> => {

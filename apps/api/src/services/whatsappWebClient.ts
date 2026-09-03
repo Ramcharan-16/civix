@@ -9,6 +9,7 @@ let isClientReady = false;
 let qrRawData: string | null = null;
 let qrDataUrl: string | null = null;
 let clientInitStarted = false;
+let lastInitError: string | null = null;
 
 function getAuthDirectory(): string {
   return path.resolve(__dirname, '../../.wwebjs_auth');
@@ -19,6 +20,7 @@ export const PERMANENT_WHATSAPP_NUMBER = process.env.OFFICIAL_WHATSAPP_NUMBER ||
 export function initWhatsAppWebClient() {
   if (clientInitStarted) return;
   clientInitStarted = true;
+  lastInitError = null;
 
   try {
     const authPath = getAuthDirectory();
@@ -105,6 +107,7 @@ export function initWhatsAppWebClient() {
 
     client.initialize().catch((err) => {
       console.error('[WhatsAppWeb] Error during client.initialize():', err.message);
+      lastInitError = err.message;
       clientInitStarted = false;
       setTimeout(() => {
         if (!isClientReady) {
@@ -115,6 +118,7 @@ export function initWhatsAppWebClient() {
     });
   } catch (err: any) {
     console.error('[WhatsAppWeb] Failed to start WhatsApp Web Client:', err.message);
+    lastInitError = err.message;
     clientInitStarted = false;
   }
 }
@@ -129,7 +133,8 @@ export function getWhatsAppStatus() {
     officialNumber: PERMANENT_WHATSAPP_NUMBER,
     hasQr: !!qrRawData,
     qrRaw: qrRawData,
-    qrDataUrl
+    qrDataUrl,
+    lastError: lastInitError
   };
 }
 

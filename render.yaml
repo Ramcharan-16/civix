@@ -20,3 +20,7 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: https://civix-murex.vercel.app
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/src/.puppeteer-cache
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "false"

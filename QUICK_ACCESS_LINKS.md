@@ -28,10 +28,11 @@ This automatically starts both the **Backend API (port 5000)** and **Frontend We
 
 ## 📱 WhatsApp Web / Business Gateway Details
 
+- **Dedicated Official Sender:** `+91 8374895670` (Permanently Locked)
 - **Session Location:** Saved permanently in `apps/api/.wwebjs_auth/`
-- **Re-scanning:** **Not required** on app restart (connects automatically).
+- **Re-scanning:** **Not required** on app restart (connects automatically to `8374895670`).
 - **Multi-Device Support:** You can use `web.whatsapp.com` on your browser at the same time without conflicts.
-- **Switching Numbers:** Open [http://localhost:5000/whatsapp/qr](http://localhost:5000/whatsapp/qr) and click *"Switch / Link New Number"*.
+- **Console / Status:** [http://localhost:5000/whatsapp/qr](http://localhost:5000/whatsapp/qr)
 
 ---
 

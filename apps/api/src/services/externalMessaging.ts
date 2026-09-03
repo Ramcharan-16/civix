@@ -436,9 +436,9 @@ export async function sendWhatsAppDirectMessage(
     console.warn('[WhatsAppService] WhatsApp Web gateway dispatch note:', webErr.message);
   }
 
-  // 2. Check Green-API (Instant WhatsApp Cloud Provider Fallback)
-  const greenApiId = process.env.GREEN_API_INSTANCE_ID || '710722723599';
-  const greenApiToken = process.env.GREEN_API_API_TOKEN || 'd8079b96910e47c198a774588b1a7b23c3e77c36c1f44770b7';
+  // 2. Check Green-API (Optional Cloud Provider Fallback if configured)
+  const greenApiId = process.env.GREEN_API_INSTANCE_ID;
+  const greenApiToken = process.env.GREEN_API_API_TOKEN;
 
   if (greenApiId && greenApiToken && rawPhone) {
     try {

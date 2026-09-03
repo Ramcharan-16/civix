@@ -263,24 +263,28 @@ app.get(['/whatsapp/qr', '/api/whatsapp/qr'], (req, res) => {
             const slot = document.getElementById('content-slot');
 
             if (data.isReady) {
-              if (currentReadyState !== true) {
+              if (currentReadyState !== true || data.connectedNumber) {
                 currentReadyState = true;
+                const senderDisplay = data.connectedNumber ? \`+\${data.connectedNumber}\` : 'Linked Device';
+                const nameDisplay = data.pushname ? \` (\${data.pushname})\` : '';
                 slot.innerHTML = \`
-                  <div class="status-badge badge-ready">● ACTIVE & CONNECTED</div>
-                  <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">WhatsApp is Linked!</h2>
-                  <p style="color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
-                    Your WhatsApp session is active and ready to deliver real-time messages to <strong>unlimited phone numbers</strong>.
-                  </p>
+                  <div class="status-badge badge-ready">● ACTIVE & LINKED: \${senderDisplay}</div>
+                  <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 6px;">WhatsApp Connected!</h2>
+                  <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 10px; padding: 12px; margin-bottom: 18px;">
+                    <div style="font-size: 11px; color: #6ee7b7; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;">Active Sending Number</div>
+                    <div style="font-size: 18px; font-weight: 800; color: #ffffff; margin-top: 2px;">\${senderDisplay}\${nameDisplay}</div>
+                    <div style="font-size: 12px; color: #a7f3d0; margin-top: 4px;">All Civix notifications will be sent directly from this number.</div>
+                  </div>
                   <div class="test-panel">
-                    <label>Send Quick Live Test Alert:</label>
-                    <input type="tel" id="testPhone" placeholder="Recipient Phone (e.g. 9014749680)" value="9014749680" />
+                    <label>Send Quick Live Test Alert from \${senderDisplay}:</label>
+                    <input type="tel" id="testPhone" placeholder="Recipient Phone (e.g. 8374895670)" value="8374895670" />
                     <button class="btn btn-test" style="width: 100%; justify-content: center;" onclick="sendTestMessage()">
-                      🚀 Dispatch Test WhatsApp Message
+                      🚀 Dispatch Test Message via \${senderDisplay}
                     </button>
                     <div id="testOutput" style="font-size: 12px; margin-top: 8px; color: #34d399;"></div>
                   </div>
                   <div style="margin-top: 24px;">
-                    <button class="btn btn-reset" onclick="triggerReset()">🔄 Switch / Link New Number</button>
+                    <button class="btn btn-reset" onclick="triggerReset()">🔄 Switch / Re-link Different Number</button>
                   </div>
                 \`;
               }

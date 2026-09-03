@@ -14,6 +14,8 @@ function getAuthDirectory(): string {
   return path.resolve(__dirname, '../../.wwebjs_auth');
 }
 
+export const PERMANENT_WHATSAPP_NUMBER = process.env.OFFICIAL_WHATSAPP_NUMBER || '8374895670';
+
 export function initWhatsAppWebClient() {
   if (clientInitStarted) return;
   clientInitStarted = true;
@@ -21,6 +23,7 @@ export function initWhatsAppWebClient() {
   try {
     const authPath = getAuthDirectory();
     console.log(`[WhatsAppWeb] Initializing Local WhatsApp Web Client at: ${authPath}`);
+    console.log(`[WhatsAppWeb] Designated Official Permanent Number: +91 ${PERMANENT_WHATSAPP_NUMBER}`);
 
     client = new Client({
       authStrategy: new LocalAuth({
@@ -49,7 +52,7 @@ export function initWhatsAppWebClient() {
       }
 
       console.log('\n========================================================================');
-      console.log('📲 [WHATSAPP-WEB] SCAN QR CODE TO ACTIVATE UNLIMITED MESSAGING:');
+      console.log(`📲 [WHATSAPP-WEB] SCAN QR CODE TO LINK OFFICIAL NUMBER (+91 ${PERMANENT_WHATSAPP_NUMBER}):`);
       console.log('👉 Open your browser at: http://localhost:5000/whatsapp/qr');
       console.log('Or scan this QR directly in your terminal:');
       console.log('========================================================================\n');
@@ -61,8 +64,12 @@ export function initWhatsAppWebClient() {
       isClientReady = true;
       qrRawData = null;
       qrDataUrl = null;
+      const connectedNumber = client?.info?.wid?.user || PERMANENT_WHATSAPP_NUMBER;
+      const pushname = client?.info?.pushname || '';
       console.log('\n========================================================================');
-      console.log('✅ [WhatsAppWeb] WHATSAPP IS CONNECTED & READY! UNLIMITED MESSAGING ACTIVE.');
+      console.log(`✅ [WhatsAppWeb] WHATSAPP IS PERMANENTLY CONNECTED & READY!`);
+      console.log(`📱 DEDICATED SENDER NUMBER: +${connectedNumber} ${pushname ? `(${pushname})` : ''}`);
+      console.log(`🔒 ALL CIVIX CITIZEN ALERTS & SYSTEM UPDATES WILL DISPATCH FROM THIS NUMBER.`);
       console.log('========================================================================\n');
     });
 
@@ -105,8 +112,13 @@ export function initWhatsAppWebClient() {
 }
 
 export function getWhatsAppStatus() {
+  const connectedNumber = client?.info?.wid?.user || null;
+  const pushname = client?.info?.pushname || null;
   return {
     isReady: isClientReady,
+    connectedNumber,
+    pushname,
+    officialNumber: PERMANENT_WHATSAPP_NUMBER,
     hasQr: !!qrRawData,
     qrRaw: qrRawData,
     qrDataUrl
@@ -163,7 +175,8 @@ export async function sendViaWhatsAppWeb(
 
     const targetChatId = `${cleanNumber}@c.us`;
 
-    console.log(`[WhatsAppWeb] 🚀 Dispatching live direct chat message to ${targetChatId} (${cleanNumber}) via WhatsApp Web Client...`);
+    const senderNumber = client?.info?.wid?.user || 'Linked Account';
+    console.log(`[WhatsAppWeb] 🚀 Dispatching live direct message from +${senderNumber} to recipient ${targetChatId} (${cleanNumber})...`);
     
     // Fast promise race to prevent hanging
     const sendPromise = client.sendMessage(targetChatId, message);
@@ -173,7 +186,7 @@ export async function sendViaWhatsAppWeb(
 
     const sentMsg: any = await Promise.race([sendPromise, timeoutPromise]);
     const msgId = sentMsg?.id?.id || 'sent';
-    console.log(`[WhatsAppWeb] ✅ Message DELIVERED to ${cleanNumber}! ID: ${msgId}`);
+    console.log(`[WhatsAppWeb] ✅ Message DELIVERED from +${senderNumber} to ${cleanNumber}! ID: ${msgId}`);
     return { success: true, id: msgId };
   } catch (err: any) {
     console.error(`[WhatsAppWeb] Failed to send to ${recipientPhone}:`, err.message);

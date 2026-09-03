@@ -167,14 +167,20 @@ export async function sendViaWhatsAppWeb(
       if (typeof client.getNumberId === 'function') {
         const numberDetails = await client.getNumberId(cleanNumber);
         if (numberDetails && numberDetails._serialized) {
-          targetChatId = numberDetails._serialized;
+          // If WhatsApp returned an internal LID (@lid), preserve direct phone delivery via @c.us
+          if (numberDetails._serialized.endsWith('@lid')) {
+            targetChatId = `${cleanNumber}@c.us`;
+          } else {
+            targetChatId = numberDetails._serialized;
+          }
         }
       }
     } catch (e: any) {
       console.warn(`[WhatsAppWeb] getNumberId notice for ${cleanNumber}:`, e.message);
+      targetChatId = `${cleanNumber}@c.us`;
     }
 
-    console.log(`[WhatsAppWeb] 🚀 Dispatching live message to ${targetChatId} via WhatsApp Web Client...`);
+    console.log(`[WhatsAppWeb] 🚀 Dispatching live direct chat message to ${targetChatId} (${cleanNumber}) via WhatsApp Web Client...`);
     
     const sentMsg = await client.sendMessage(targetChatId, message);
     const msgId = sentMsg?.id?.id || 'sent';

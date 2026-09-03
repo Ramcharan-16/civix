@@ -16,15 +16,6 @@ function getAuthDirectory(): string {
 
 export function initWhatsAppWebClient() {
   if (clientInitStarted) return;
-
-  const isCloud = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
-  const explicitlyEnabled = process.env.ENABLE_WHATSAPP_PUPPETEER === 'true';
-
-  if (isCloud && !explicitlyEnabled) {
-    console.log('[WhatsAppWeb] Running in cloud environment. Puppeteer WhatsApp-Web client bypassed to optimize memory (using instant Green-API / Twilio direct API).');
-    return;
-  }
-
   clientInitStarted = true;
 
   try {
@@ -170,28 +161,17 @@ export async function sendViaWhatsAppWeb(
       cleanNumber = `91${cleanNumber}`;
     }
 
-    let targetChatId = `${cleanNumber}@c.us`;
-
-    try {
-      if (typeof client.getNumberId === 'function') {
-        const numberDetails = await client.getNumberId(cleanNumber);
-        if (numberDetails && numberDetails._serialized) {
-          // If WhatsApp returned an internal LID (@lid), preserve direct phone delivery via @c.us
-          if (numberDetails._serialized.endsWith('@lid')) {
-            targetChatId = `${cleanNumber}@c.us`;
-          } else {
-            targetChatId = numberDetails._serialized;
-          }
-        }
-      }
-    } catch (e: any) {
-      console.warn(`[WhatsAppWeb] getNumberId notice for ${cleanNumber}:`, e.message);
-      targetChatId = `${cleanNumber}@c.us`;
-    }
+    const targetChatId = `${cleanNumber}@c.us`;
 
     console.log(`[WhatsAppWeb] 🚀 Dispatching live direct chat message to ${targetChatId} (${cleanNumber}) via WhatsApp Web Client...`);
     
-    const sentMsg = await client.sendMessage(targetChatId, message);
+    // Fast promise race to prevent hanging
+    const sendPromise = client.sendMessage(targetChatId, message);
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('WhatsApp Web sendMessage timeout (6s)')), 6000)
+    );
+
+    const sentMsg: any = await Promise.race([sendPromise, timeoutPromise]);
     const msgId = sentMsg?.id?.id || 'sent';
     console.log(`[WhatsAppWeb] ✅ Message DELIVERED to ${cleanNumber}! ID: ${msgId}`);
     return { success: true, id: msgId };

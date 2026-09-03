@@ -422,7 +422,21 @@ export async function sendWhatsAppDirectMessage(
     return { success: true, simulated: true };
   }
 
-  // 1. Check Green-API (Instant WhatsApp Cloud Provider)
+  // 1. Check WhatsApp Web Gateway (#1 Unlimited Direct Messaging to ANY Number)
+  try {
+    const waStatus = getWhatsAppStatus();
+    if (waStatus.isReady) {
+      console.log(`[WhatsAppService] 📱 Using Active WhatsApp Web Gateway (Unlimited direct delivery to ${rawPhone})...`);
+      const webResult = await sendViaWhatsAppWeb(rawPhone, messageBody);
+      if (webResult.success) {
+        return { success: true, sid: webResult.id };
+      }
+    }
+  } catch (webErr: any) {
+    console.warn('[WhatsAppService] WhatsApp Web gateway dispatch note:', webErr.message);
+  }
+
+  // 2. Check Green-API (Instant WhatsApp Cloud Provider Fallback)
   const greenApiId = process.env.GREEN_API_INSTANCE_ID || '710722723599';
   const greenApiToken = process.env.GREEN_API_API_TOKEN || 'd8079b96910e47c198a774588b1a7b23c3e77c36c1f44770b7';
 
@@ -446,7 +460,8 @@ export async function sendWhatsAppDirectMessage(
           console.log(`[WhatsAppService] ✅ WhatsApp message DELIVERED to ${rawPhone} via Green-API! idMessage: ${data.idMessage}`);
           return { success: true, sid: data.idMessage };
         } else if (data?.correspondentsStatus?.status === 'CORRESPONDENTS_QUOTE_EXCEEDED') {
-          console.log(`[WhatsAppService] ℹ️ Green-API trial limit notice: Recipient ${rawPhone} is not in developer trial correspondent list.`);
+          console.log(`[WhatsAppService] ℹ️ Green-API note: Recipient ${rawPhone} is not in developer trial correspondent list.`);
+          console.log(`[WhatsAppService] 💡 Tip: Scan QR at http://localhost:5000/whatsapp/qr to send unlimited messages to ANY number via Web.js!`);
         } else {
           console.warn(`[WhatsAppService] ⚠️ Green-API note for ${rawPhone}:`, JSON.stringify(data));
         }
@@ -454,19 +469,6 @@ export async function sendWhatsAppDirectMessage(
     } catch (err: any) {
       console.warn('[WhatsAppService] Green-API dispatch note:', err.message);
     }
-  }
-
-  // 2. Check WhatsApp Web Client (Local Session if Ready)
-  try {
-    const waStatus = getWhatsAppStatus();
-    if (waStatus.isReady) {
-      const webResult = await sendViaWhatsAppWeb(rawPhone, messageBody);
-      if (webResult.success) {
-        return { success: true, sid: webResult.id };
-      }
-    }
-  } catch (webErr: any) {
-    // Proceed to next fallback
   }
 
   // 3. Check Twilio Provider Fallback

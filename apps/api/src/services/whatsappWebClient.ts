@@ -25,22 +25,29 @@ export function initWhatsAppWebClient() {
     console.log(`[WhatsAppWeb] Initializing Local WhatsApp Web Client at: ${authPath}`);
     console.log(`[WhatsAppWeb] Designated Official Permanent Number: +91 ${PERMANENT_WHATSAPP_NUMBER}`);
 
+    const puppeteerArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--disable-gpu',
+      '--disable-features=IsolateOrigins,site-per-process'
+    ];
+
+    if (process.platform === 'linux') {
+      puppeteerArgs.push('--single-process');
+    }
+
     client = new Client({
       authStrategy: new LocalAuth({
         dataPath: authPath
       }),
       puppeteer: {
         headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-          '--disable-features=IsolateOrigins,site-per-process'
-        ]
+        args: puppeteerArgs,
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (process.platform === 'linux' ? '/usr/bin/google-chrome-stable' : undefined)
       }
     });
 

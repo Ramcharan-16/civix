@@ -47,7 +47,7 @@ export function initWhatsAppWebClient() {
       puppeteer: {
         headless: true,
         args: puppeteerArgs,
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || (process.platform === 'linux' ? '/usr/bin/google-chrome-stable' : undefined)
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
       }
     });
 
